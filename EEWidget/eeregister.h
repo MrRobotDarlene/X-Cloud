@@ -16,7 +16,10 @@ typedef enum {
 namespace Ui {
 class EERegister;
 }
-
+/**
+ * @brief The EERegister class
+ * Form for user registration. In case of succesful registration - log user in
+ */
 class EERegister : public EEWidget
 {
     Q_OBJECT
@@ -32,7 +35,13 @@ private:
     bool isEmailValid();
     void warningMessage(QString, EERegisterField);
 
+signals:
+    void userRegistredLoggedIn();
 private slots:
+    /**
+     * @brief EERegister::on_pushButtonRegister_clicked
+     * Try to registrate user
+     */
     void on_pushButtonRegister_clicked();
 
     void on_lineEditEmail_textChanged(const QString &arg1);
@@ -40,6 +49,11 @@ private slots:
     void on_lineEditPassword_textChanged(const QString &arg1);
 
     void requestError(EEError, QString);
+    /**
+     * @brief EERegister::userRegistered
+     * After succesful registration - log user in
+     */
+    void userRegistered(EEUser);
 
 private:
     Ui::EERegister *ui;

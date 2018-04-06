@@ -1,17 +1,25 @@
 #include "eebucket.h"
 
+#include <QDebug>
+
 EEBucket::EEBucket()
 {
-
+    mName = "";
+    mEncryptionKey = "";
+    mPublicPermissions;
+    mPubKeys;
+    mTransfer = -1;
+    mStorage = -1;
 }
 
-EEBucket::EEBucket(EEBucket *b) : EEAbstractContainer(b),
-    mEncryptionKey{b->encryptionKey()},
-    mPublicPermissions{QStringList(b->publicPermissions())},
-    mPubKeys{QStringList(b->pubKeys())},
-    mTransfer{b->transfer()},
-    mStorage{b->storage()}
+EEBucket::EEBucket(EEBucket *b) : EEAbstractContainer(b)
 {
+    mName = b->name();
+    mEncryptionKey = b->encryptionKey();
+    mPublicPermissions = QStringList(b->publicPermissions());
+    mPubKeys = QStringList(b->pubKeys());
+    mTransfer = b->transfer();
+    mStorage = b->storage();
 }
 
 QString EEBucket::encryptionKey() const

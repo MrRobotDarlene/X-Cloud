@@ -26,3 +26,10 @@ void EEWidget::setSdk(EESDK *sdk)
 {
     mSdk = sdk;
 }
+
+void EEWidget::show()
+{
+    QWidget::show();
+
+    raise();
+}

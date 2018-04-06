@@ -3,10 +3,7 @@
 #include "../EEDataSync/EEParser/eefolderparsecontroller.h"
 #include "controller.h"
 
-#include <QCryptographicHash>
 #include <QDebug>
-
-#define SIZE_BYTES(v) v*8.0
 
 EEFileLoader *gCryptoPointer;
 
@@ -15,12 +12,11 @@ EEFileLoader::EEFileLoader(EESDK *sdk, QObject *parent) : QObject(parent),
     mSdk{sdk}
 {
     gCryptoPointer = this;
+}
 
-    connect(mSdk, SIGNAL(shardsReceived(QList<EEShard>)), this, SLOT(shardsReceived(QList<EEShard>)));
-    connect(mSdk, SIGNAL(frameCreated(EEFrame)), this, SLOT(frameCreated(EEFrame)));
-    connect(mSdk, SIGNAL(shardAddedToFrame(EEShard)), this, SLOT(shardAddedToFrame(EEShard)));
-
-    connect(mSdk, SIGNAL(requestError(EEError, QString)), this, SLOT(requestError(EEError, QString)));
+EEFileLoader::~EEFileLoader()
+{
+    cleanVariables();
 }
 
 /**
@@ -32,9 +28,7 @@ EEFileLoader::EEFileLoader(EESDK *sdk, QObject *parent) : QObject(parent),
  */
 void EEFileLoader::uploadData(QString bucketId, QString name)
 {
-    mBucketId = bucketId;
-    mFileName = name;
-    mState = EEFileLoaderStateUpload;
+//    name = "\""+ name + "\"";
 
     //required for correct casting
     QByteArray lBucketIdByteArray = bucketId.toLatin1();
@@ -44,10 +38,14 @@ void EEFileLoader::uploadData(QString bucketId, QString name)
     char *lBucketCharId = lBucketIdByteArray.data();
     char *lFilePath = lFileNameByteArray.data();
 
-    if (start_upload_file(lBucketCharId, lFilePath)) {
+    qDebug() << "File to upload path:" << lFilePath;
+    if (start_upload_file(lBucketCharId,
+                          lFilePath,
+                          mSdk->getEmail().toUtf8().data(),
+                          mSdk->getPassword().toUtf8().data(),
+                          mSdk->getBridge().toUtf8().data())) {
         qDebug() << "Unsuccesful file uploading! Move to the next file!";
-
-        emit moveToTheNextFile();
+        emit fileUploaded();
     }
 }
 
@@ -61,9 +59,7 @@ void EEFileLoader::uploadData(QString bucketId, QString name)
  */
 void EEFileLoader::downloadFile(QString bucketId, QString fileId, QString fileName)
 {
-    mState = EEFileLoaderStateDownload;
-    mFileId = fileId;
-    mBucketId = bucketId;
+//    fileName = "\""+ fileName + "\"";
 
     //required for correct casting
     QByteArray lBucketIdByteArray = bucketId.toLatin1();
@@ -75,67 +71,69 @@ void EEFileLoader::downloadFile(QString bucketId, QString fileId, QString fileNa
     char *lFileCharId = lFileIdByteArray.data();
     char *lFilePath = lFileName.data();
 
-    start_download_file(lBucketCharId, lFileCharId, lFilePath);
+    qDebug() << "File to download path:" << lFilePath;
+    if (start_download_file(lBucketCharId,
+                        lFileCharId,
+                        lFilePath,
+                        mSdk->getEmail().toUtf8().data(),
+                        mSdk->getPassword().toUtf8().data(),
+                        mSdk->getBridge().toUtf8().data())) {
+        qDebug() << "Unsuccesful file downloading! Move to the next file...";
+        emit fileDownloaded();
+    }
+}
+/**
+ * @brief EEFileLoader::deleteFile
+ * Delete file from cloud usign bucketid and its file
+ * @param bucketId
+ * @param fileId
+ */
+void EEFileLoader::deleteFile(QString bucketId, QString fileId)
+{
+
+    QByteArray lBucketIdByteArray = bucketId.toLatin1();
+    QByteArray lFileIdByteArray = fileId.toLatin1();
+
+    //list of arguments
+    char *lBucketCharId = lBucketIdByteArray.data();
+    char *lFileCharId = lFileIdByteArray.data();
+
+    if (start_delete_file(lBucketCharId, lFileCharId,
+                        mSdk->getEmail().toUtf8().data(),
+                        mSdk->getPassword().toUtf8().data(),
+                        mSdk->getBridge().toUtf8().data())) {
+        qDebug() << "Unsuccesful file deletion!";
+        emit fileDeleted();
+    }
+
 }
 
+/**
+ * @brief EEFileLoader::handleCallbackResult
+ * Method, which handle callback about download/upload from .c program
+ * @param callResult
+ */
 void EEFileLoader::handleCallbackResult(CallbackResult callResult)
 {
     switch (callResult) {
-    case ErrorCallBack:
-        qDebug() << "Error! Unsuccesful downloading/uploading!";
-        emit fileUploaded();
-        break;
+    case ErrorDownloadingCallBack:
+        qDebug() << "Error! Unsuccesful downloading!";
     case FileDownloaded:
         emit fileDownloaded();
         break;
+    case ErrorUploadingCallback:
+        qDebug() << "Error! Unsuccesful uploading!";
     case FileUploaded:
         emit fileUploaded();
+        break;
+    case ErrorFileDeletion:
+        qDebug() << "Unsuccesful file deletion!";
+        break;
+    case FileDeleted:
+        emit fileDeleted();
         break;
     default:
         qDebug() << "Unknown result!";
         break;
     }
-    qDebug() << "END HANDLING RESULT!";
-}
-
-EEShardRequest EEFileLoader::makeShards()
-{
-
-}
-
-void EEFileLoader::frameCreated(EEFrame frame)
-{
-    qDebug() << __FUNCTION__;
-    mFrame = frame;
-    switch (mState) {
-    case EEFileLoaderStateDownload:
-
-        break;
-    case EEFileLoaderStateUpload:
-        mSdk->createToken(mBucketId, mFileName, EEToken::OperationPush);
-        break;
-    default:
-        break;
-    }
-}
-
-void EEFileLoader::shardAddedToFrame(EEShard shard)
-{
-    qDebug() << __FUNCTION__;
-    mSdk->uploadShardToNode(shard, mData);
-}
-
-void EEFileLoader::shardsReceived(QList<EEShard> list)
-{
-    qDebug() << __FUNCTION__;
-
-    foreach (EEShard shard, list) {
-        mSdk->downloadShardFromNode(shard);
-    }
-}
-
-void EEFileLoader::requestError(EEError, QString method)
-{
-    qDebug() << __FUNCTION__;
-
 }

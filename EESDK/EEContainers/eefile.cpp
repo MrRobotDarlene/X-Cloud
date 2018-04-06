@@ -1,8 +1,15 @@
 #include "eefile.h"
 
-EEFile::EEFile()
+EEFile::EEFile():
+    mBucketId{""},
+    mMimetype{""},
+    mFilename{""},
+    mFrame{""},
+    mSize{-1},
+    mId{""},
+    mHMac()
 {
-
+    mCreated;
 }
 
 QString EEFile::bucketId() const
@@ -65,12 +72,12 @@ void EEFile::setId(const QString &id)
     mId = id;
 }
 
-QString EEFile::created() const
+QDateTime EEFile::created() const
 {
     return mCreated;
 }
 
-void EEFile::setCreated(const QString &created)
+void EEFile::setCreated(const QDateTime &created)
 {
     mCreated = created;
 }

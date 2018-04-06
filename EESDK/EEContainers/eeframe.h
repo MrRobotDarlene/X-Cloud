@@ -18,8 +18,8 @@ public:
     void appendShard(QString shard);
 
 private:
-    QStringList mShards;
     int mSize;
+    QStringList mShards;
 };
 
 #endif // EEFRAME_H

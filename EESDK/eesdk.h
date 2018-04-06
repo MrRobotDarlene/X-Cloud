@@ -22,6 +22,8 @@
 
 #define MTD_CREATE_FRAME    "Create frame"
 
+#define MTD_DELETE_FILE_FROM_BUCKET "Delete file"
+
 
 class QNetworkAccessManager;
 class QNetworkReply;
@@ -41,6 +43,8 @@ public:
     QString getEmail() const;
 
     QString getPassword() const;
+
+    QString getBridge();
 
     //managing users
     void registerUser(QString email, QString password, QString pubkey = "", QString referalKey = "");
@@ -76,9 +80,9 @@ private slots:
 
 signals:
     //this signal is emmited when buckets list is received and parsed.
-    void bucketsReceived(QList<EEBucket>);
+    void bucketsReceived(QList<EEBucket*>);
     void filesForBucketReceived(QList<EEFile>);
-    void bucketCreated(EEBucket);
+    void bucketCreated(EEBucket*);
     void bucketDeleted(QString id);
     void tokenCreated(EEToken);
     void shardsReceived(QList<EEShard>);

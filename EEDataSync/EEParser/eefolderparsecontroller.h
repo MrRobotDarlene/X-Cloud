@@ -15,7 +15,7 @@ class EEFolderParseController: public QObject
 {
     Q_OBJECT
 public:
-    explicit EEFolderParseController(QString rootAddress, QObject *parent = nullptr);
+    explicit EEFolderParseController(QObject *parent = nullptr);
 
     ~EEFolderParseController();
 
@@ -23,6 +23,7 @@ public:
 
     QString filePath(QString fileName);
 
+    void startSubfoldersInitialization(QString rootAddress);
 private:
     /**
      * @brief EEController::initializeListOfSubFoldersElements
@@ -35,6 +36,7 @@ private:
 private:
     QString mRootAddress;
     EEFolderModel *mRootModel;
+    static constexpr int mMaximumFileSize = 3000000;
 };
 
 #endif // EECONTROLLER_H

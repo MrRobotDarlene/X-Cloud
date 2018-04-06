@@ -2,6 +2,7 @@
 #define EEUSER_H
 
 #include <QString>
+#include <QDateTime>
 
 class EEUser
 {
@@ -11,15 +12,15 @@ public:
     QString email() const;
     void setEmail(const QString &email);
 
-    QString created() const;
-    void setCreated(const QString &created);
+    QDateTime created() const;
+    void setCreated(const QDateTime &created);
 
     bool isActivated() const;
     void setIsActivated(bool isActivated);
 
 private:
     QString mEmail;
-    QString mCreated;
+    QDateTime mCreated;
     bool mIsActivated;
 };
 

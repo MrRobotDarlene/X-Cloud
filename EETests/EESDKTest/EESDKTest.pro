@@ -31,15 +31,21 @@ include (../../EEDataSync/EEDataSync.pri)
 
 SOURCES += \
     main.cpp \
-    eesdktest.cpp
+    eesdktest.cpp \
+    ../../eesettingsclass.cpp
 
 DEFINES += SRCDIR=\\\"$$PWD/\\\"
 
-INCLUDEPATH += $$PWD/../..
+INCLUDEPATH += $$PWD/../../
 
 INCLUDEPATH += $$PWD/../../EEDataSync/EEParser/
 
 HEADERS += \
-    eesdktest.h
+    eesdktest.h \
+    ../../eesettingsclass.h
 
 
+
+INCLUDEPATH += $$PWD/EEDataSync/EEParser/
+INCLUDEPATH += $$PWD/EEDataSync/
+INCLUDEPATH += $$PWD/EEBucketSyncronization/

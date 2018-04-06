@@ -16,17 +16,24 @@ public:
     void startTests();
 
 private:
+    void testDataDownloading();
+    void testDataUploading();
     void testCreateBucket();
-    void testDestroyBucket(QString id);
+    void testDestroyBuckets();
     void testGetBuckets();
     void testUploadFile();
+    void testDownloadFile();
+    void testUserRegistration();
+    void testGetListOfFilesForBucket();
+    void testDeleteFile();
 
     void showTestStatus(QString method, QString status = "Test succeed: ", QString message = "Ok");
 
 private slots:
-    void bucketCreated(EEBucket);
-    void bucketDeleted(QString id);
-    void bucketsReceived(QList<EEBucket>);
+    void bucketCreated(EEBucket*);
+    void bucketsReceived(QList<EEBucket*>);
+    void bucketsForDeletionReceived(QList<EEBucket*>);
+
 
     void requestError(EEError, QString);
 
@@ -37,7 +44,7 @@ private:
 
     QString mBacketName;
 
-    QList<EEBucket> mBuckets;
+    QList<EEBucket*> mBuckets;
     int mDestroyCounter;
 };
 

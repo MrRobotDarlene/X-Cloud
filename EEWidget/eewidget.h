@@ -13,6 +13,7 @@ public:
     explicit EEWidget(EESDK *sdk, QWidget *parent = 0);
     EESDK *sdk() const;
     void setSdk(EESDK *sdk);
+    void show();
 protected:
     void closeEvent(QCloseEvent *event);
     void moveEvent(QMoveEvent *event);

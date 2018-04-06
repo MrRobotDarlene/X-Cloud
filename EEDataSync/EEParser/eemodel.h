@@ -32,7 +32,9 @@ public:
      */
     void setName(const QString &name);
 
-    bool operator ==(EEModel&);
+    inline bool operator ==(EEModel& model) {
+        return (this->name() == model.name() && this->updated() == model.updated());
+    }
 
 private:
     QDateTime mUpdated;

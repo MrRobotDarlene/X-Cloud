@@ -973,76 +973,92 @@ API int destroy_env(s_env_t *env)
 {
     int status = 0;
 
-    // free and destroy all bridge options
-    free((char *)env->bridge_options->proto);
-    free((char *)env->bridge_options->host);
-    free((char *)env->bridge_options->user);
 
-    // zero out password before freeing
-    if (env->bridge_options->pass) {
-        unsigned int pass_len = strlen(env->bridge_options->pass);
-        if (pass_len > 0) {
-            memset_zero((char *)env->bridge_options->pass, pass_len);
+    if (env->bridge_options) {
+        // free and destroy all bridge options
+        if (env->bridge_options->proto)
+        free((char *)env->bridge_options->proto);
+        if (env->bridge_options->host)
+        free((char *)env->bridge_options->host);
+        if (env->bridge_options->user)
+        free((char *)env->bridge_options->user);
+
+        // zero out password before freeing
+        if (env->bridge_options->pass) {
+            unsigned int pass_len = strlen(env->bridge_options->pass);
+            if (pass_len > 0) {
+                memset_zero((char *)env->bridge_options->pass, pass_len);
+            }
+    #ifdef _POSIX_MEMLOCK
+            status = munlock(env->bridge_options->pass, pass_len);
+    #elif _WIN32
+            if (!VirtualUnlock((char *)env->bridge_options->pass, pass_len)) {
+                status = 1;
+            }
+    #endif
+
+    #ifdef _WIN32
+            VirtualFree((char *)env->bridge_options, pass_len, MEM_RELEASE);
+    #else
+            free((char *)env->bridge_options->pass);
+    #endif
         }
-#ifdef _POSIX_MEMLOCK
-        status = munlock(env->bridge_options->pass, pass_len);
-#elif _WIN32
-        if (!VirtualUnlock((char *)env->bridge_options->pass, pass_len)) {
-            status = 1;
+
+        free(env->bridge_options);
+    }
+
+    if (env->encrypt_options) {
+        // free and destroy all encryption options
+        if (env->encrypt_options && env->encrypt_options->mnemonic) {
+            unsigned int mnemonic_len = strlen(env->encrypt_options->mnemonic);
+
+            // zero out file encryption mnemonic before freeing
+            if (mnemonic_len > 0) {
+                memset_zero((char *)env->encrypt_options->mnemonic, mnemonic_len);
+            }
+    #ifdef _POSIX_MEMLOCK
+            status = munlock(env->encrypt_options->mnemonic, mnemonic_len);
+    #elif _WIN32
+            if (!VirtualUnlock((char *)env->encrypt_options->mnemonic, mnemonic_len)) {
+                status = 1;
+            }
+    #endif
+
+    #ifdef _WIN32
+            VirtualFree((char *)env->bridge_options, mnemonic_len, MEM_RELEASE);
+    #else
+            free((char *)env->encrypt_options->mnemonic);
+    #endif
         }
-#endif
 
-#ifdef _WIN32
-        VirtualFree((char *)env->bridge_options, pass_len, MEM_RELEASE);
-#else
-        free((char *)env->bridge_options->pass);
-#endif
-
-    }
-
-    free(env->bridge_options);
-
-    // free and destroy all encryption options
-    if (env->encrypt_options && env->encrypt_options->mnemonic) {
-        unsigned int mnemonic_len = strlen(env->encrypt_options->mnemonic);
-
-        // zero out file encryption mnemonic before freeing
-        if (mnemonic_len > 0) {
-            memset_zero((char *)env->encrypt_options->mnemonic, mnemonic_len);
+        if (env->tmp_path) {
+            free((char *)env->tmp_path);
         }
-#ifdef _POSIX_MEMLOCK
-        status = munlock(env->encrypt_options->mnemonic, mnemonic_len);
-#elif _WIN32
-        if (!VirtualUnlock((char *)env->encrypt_options->mnemonic, mnemonic_len)) {
-            status = 1;
+
+        free(env->encrypt_options);
+    }
+
+
+    if (env->http_options) {
+        // free all http options
+        if (env->http_options->user_agent) {
+            free((char *)env->http_options->user_agent);
         }
-#endif
-
-#ifdef _WIN32
-        VirtualFree((char *)env->bridge_options, mnemonic_len, MEM_RELEASE);
-#else
-        free((char *)env->encrypt_options->mnemonic);
-#endif
+        if (env->http_options->proxy_url) {
+            free((char *)env->http_options->proxy_url);
+        }
+        if (env->http_options->cainfo_path) {
+            free((char *)env->http_options->cainfo_path);
+        }
+        free(env->http_options);
     }
 
-    if (env->tmp_path) {
-        free((char *)env->tmp_path);
+
+    if (env->log) {
+        // free the log levels
+        free(env->log);
     }
 
-    free(env->encrypt_options);
-
-    // free all http options
-    free((char *)env->http_options->user_agent);
-    if (env->http_options->proxy_url) {
-        free((char *)env->http_options->proxy_url);
-    }
-    if (env->http_options->cainfo_path) {
-        free((char *)env->http_options->cainfo_path);
-    }
-    free(env->http_options);
-
-    // free the log levels
-    free(env->log);
 
     // free the environment
     free(env);

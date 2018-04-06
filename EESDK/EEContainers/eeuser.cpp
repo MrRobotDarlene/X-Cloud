@@ -1,6 +1,7 @@
 #include "eeuser.h"
 
-EEUser::EEUser()
+EEUser::EEUser():
+    mIsActivated()
 {
 
 }
@@ -15,12 +16,12 @@ void EEUser::setEmail(const QString &email)
     mEmail = email;
 }
 
-QString EEUser::created() const
+QDateTime EEUser::created() const
 {
     return mCreated;
 }
 
-void EEUser::setCreated(const QString &created)
+void EEUser::setCreated(const QDateTime &created)
 {
     mCreated = created;
 }

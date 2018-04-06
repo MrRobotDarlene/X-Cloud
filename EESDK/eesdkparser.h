@@ -14,6 +14,9 @@ class EEFrame;
 class EEError;
 class EEShardRequest;
 
+class QDateTime;
+class QString;
+
 class EESDKParser : public QObject
 {
     Q_OBJECT
@@ -24,8 +27,8 @@ public:
 
     static EEUser parseUser(QByteArray data);
     //buckets
-    static QList<EEBucket> parseBucketList(QByteArray data);
-    static EEBucket parseBucket(QByteArray data);
+    static QList<EEBucket *> parseBucketList(QByteArray data);
+    static EEBucket *parseBucket(QByteArray data);
 
     static QList<EEFile> parseFiles(QByteArray data);
     static EEFile parseFile(QByteArray data);
@@ -48,6 +51,9 @@ public:
     static QByteArray jsonCreateUserRegister(QString email, QString password, QString pubkey = "", QString referalKey = "");
 
     static QByteArray jsonCreateShardRequest(EEShardRequest);
+
+
+    static QDateTime correctDateTimeForm(QString string);
 };
 
 #endif // EEBUCKETSDKPARSER_H

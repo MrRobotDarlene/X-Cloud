@@ -6,6 +6,10 @@
 #include <QJsonValue>
 #include <QJsonArray>
 
+
+#include <QString>
+#include <QDateTime>
+
 //bucket keys
 #define KEY_USER        "user"
 #define KEY_ENCR_KEY    "encryptionKey"
@@ -79,15 +83,16 @@ EEUser EESDKParser::parseUser(QByteArray data)
     EEUser rUser;
 
     rUser.setEmail(lObj.value(KEY_EMAIL).toString());
-    rUser.setCreated(lObj.value(KEY_CREATED).toString());
+
+    rUser.setCreated(correctDateTimeForm(lObj.value(KEY_CREATED).toString()));
     rUser.setIsActivated(lObj.value(KEY_ACTIVED).toBool());
 
     return rUser;
 }
 
-QList<EEBucket> EESDKParser::parseBucketList(QByteArray data)
+QList<EEBucket*> EESDKParser::parseBucketList(QByteArray data)
 {
-    QList<EEBucket> rBuckets;
+    QList<EEBucket*> rBuckets;
 
     QJsonDocument lDoc = QJsonDocument::fromJson(data);
     QJsonArray lBuckets = lDoc.array();
@@ -102,26 +107,27 @@ QList<EEBucket> EESDKParser::parseBucketList(QByteArray data)
     return rBuckets;
 }
 
-EEBucket EESDKParser::parseBucket(QByteArray data)
+EEBucket* EESDKParser::parseBucket(QByteArray data)
 {
     QJsonDocument lDoc = QJsonDocument::fromJson(data);
     QJsonObject lObj = lDoc.object();
-    EEBucket lTmpBucket;
+    EEBucket *lTmpBucket = new EEBucket();
 
-    lTmpBucket.setUser(lObj.value(KEY_USER).toString());
-    lTmpBucket.setEncryptionKey(lObj.value(KEY_ENCR_KEY).toString());
+    lTmpBucket->setUser(lObj.value(KEY_USER).toString());
+    lTmpBucket->setEncryptionKey(lObj.value(KEY_ENCR_KEY).toString());
     foreach (QJsonValue pubPermiss, lObj.value(KEY_PUB_PERMISS).toArray()) {
-        lTmpBucket.appendPublicPermissions(pubPermiss.toString());
+        lTmpBucket->appendPublicPermissions(pubPermiss.toString());
     }
-    lTmpBucket.setCreated(lObj.value(KEY_CREATED).toString());
-    lTmpBucket.setName(lObj.value(KEY_NAME).toString());
+
+    lTmpBucket->setCreated(correctDateTimeForm(lObj.value(KEY_CREATED).toString()));
+    lTmpBucket->setName(lObj.value(KEY_NAME).toString());
     foreach (QJsonValue pubKey, lObj.value(KEY_PUB_KEYS).toArray()) {
-        lTmpBucket.appendPubKey(pubKey.toString());
+        lTmpBucket->appendPubKey(pubKey.toString());
     }
-    lTmpBucket.setIsActive(lObj.value(KEY_STATUS).toBool());
-    lTmpBucket.setTransfer(lObj.value(KEY_TRANSEFR).toInt());
-    lTmpBucket.setStorage(lObj.value(KEY_STORAGE).toInt());
-    lTmpBucket.setId(lObj.value(KEY_ID).toString());
+    lTmpBucket->setIsActive(lObj.value(KEY_STATUS).toBool());
+    lTmpBucket->setTransfer(lObj.value(KEY_TRANSEFR).toInt());
+    lTmpBucket->setStorage(lObj.value(KEY_STORAGE).toInt());
+    lTmpBucket->setId(lObj.value(KEY_ID).toString());
 
     return lTmpBucket;
 }
@@ -150,7 +156,7 @@ EEFile EESDKParser::parseFile(QByteArray data)
     rFile.setFilename(lObj.value(KEY_FILE_NAME).toString());
     rFile.setSize(lObj.value(KEY_SIZE).toInt());
     rFile.setId(lObj.value(KEY_ID).toString());
-    rFile.setCreated(lObj.value(KEY_CREATED).toString());
+    rFile.setCreated(correctDateTimeForm(lObj.value(KEY_CREATED).toString()));
     rFile.setHMac(parseHMac(lObj.value(KEY_H_MAC).toString().toUtf8()));
 
     return rFile;
@@ -260,7 +266,7 @@ EEFrame EESDKParser::parseFrame(QByteArray data)
     rFrame.setStorageSize(lObj.value(KEY_STORAGE_SIZE).toInt());
     rFrame.setSize(lObj.value(KEY_SIZE).toInt());
     rFrame.setIsActive(!lObj.value(KEY_LOCKED).toBool());
-    rFrame.setCreated(lObj.value(KEY_CREATED).toString());
+    rFrame.setCreated(correctDateTimeForm(lObj.value(KEY_CREATED).toString()));
     rFrame.setId(lObj.value(KEY_ID).toString());
 
     return rFrame;
@@ -333,4 +339,11 @@ QByteArray EESDKParser::jsonCreateShardRequest(EEShardRequest s)
 
 
     return QJsonDocument(rJson).toJson();
+}
+
+QDateTime EESDKParser::correctDateTimeForm(QString string)
+{
+    QDateTime lCorrectDateTime = QDateTime::fromString(string, "yyyy-MM-ddThh:mm:ss.zZ");
+    lCorrectDateTime.setTimeSpec(Qt::UTC);
+    return lCorrectDateTime;
 }

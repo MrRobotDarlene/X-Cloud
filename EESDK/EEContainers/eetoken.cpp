@@ -3,7 +3,8 @@
 const QString EEToken::OperationPull = "PULL";
 const QString EEToken::OperationPush = "PUSH";
 
-EEToken::EEToken()
+EEToken::EEToken():
+    mSize{-1}
 {
 
 }

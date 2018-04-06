@@ -63,20 +63,20 @@ static void fileDownloaded(int status, FILE *fd, void *handle);
 void download_signal_handler(uv_signal_t *req, int signum);
 
 static int download_file(s_env_t *env, char *bucket_id,
-                         char *file_id, char *path);
+                         char *file_id, const char *path);
+
+//static void fileDeleted(uv_work_t *work_req, int status);
 
 int do_action(int argument_number, char **arguments_array);
 
-int start_upload_file(char* bucketId, char *path);
-int start_download_file(char* bucketId, char *fileId, char *path);
+int start_upload_file(char* bucketId, const char *path, char *email, char *pass, char *bridge);
+int start_download_file(char* bucketId, char *fileId, const char *path, char *email, char*pass, char *bridge);
+int start_delete_file(char *bucketId, char *fileId,  char *email, char *pass, char *bridge) ;
 
-
-void clean_uploading_data();
-void clean_downloading_data();
-
+void cleanVariables();
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif CONTROLLER_H
+#endif //CONTROLLER_H

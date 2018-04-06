@@ -20,7 +20,19 @@ public:
     explicit EEFolderModel(EEModel *parent = nullptr);
 
     ~EEFolderModel();
-    bool addFolder(EEFolderModel *child);
+
+    /**
+     * @brief EEFolderModel::cleanChildrenList
+     * delete all subfolders and subfiles
+     */
+    void cleanChildrenList();
+    /**
+     * @brief isEmpty
+     * check does it have children
+     * @return
+     */
+    bool isEmpty();
+    bool addFolder(EEFolderModel *folder);
 
     /**
      * @brief EEFolderModel::addFile
@@ -35,22 +47,29 @@ public:
      * @brief getChildrenList
      * @return status
      */
-    QList<EEFolderModel *> getFolderList() const;
+    QList<EEFolderModel *> folderList() const;
 
     /**
      * @brief deleteFile
      * @return
      */
-    bool delelteFile(EEModel*);
+    bool deleteFile(EEModel*);
 
     /**
      * @brief deleteFolder
      * @return status
      */
-    bool deleteFolder(EEFolderModel*);
+    bool deleteFolder(EEFolderModel* folder);
 
+    /**
+     * @brief filesList
+     * @return
+     */
+    QList<EEModel *> filesList() const;
 
-    QList<EEModel *> getFilesList() const;
+    inline bool operator ==(EEFolderModel &model) {
+        return EEModel::operator ==(model);
+    }
 
 private:
     QList<EEFolderModel *> mSubdirs;

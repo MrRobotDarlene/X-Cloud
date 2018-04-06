@@ -3,9 +3,12 @@
 
 
 typedef enum {
-    ErrorCallBack= -1,
+    ErrorFileDeletion = -3,
+    ErrorUploadingCallback = -2,
+    ErrorDownloadingCallBack= -1,
     FileDownloaded = 1,
-    FileUploaded = 2
+    FileUploaded = 2,
+    FileDeleted = 3
 } CallbackResult;
 
 #ifdef __cplusplus

@@ -1,7 +1,7 @@
 #include <QCoreApplication>
 
 #include "eesdktest.h"
-#include "EEDataSync/eedatamanager.h"
+#include "EEDataSync/EEDataManager/eedatamanager.h"
 
 
 int main(int argc, char *argv[])

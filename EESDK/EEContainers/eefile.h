@@ -4,6 +4,7 @@
 #include "eehmac.h"
 
 #include <QString>
+#include <QDateTime>
 
 class EEFile
 {
@@ -28,11 +29,21 @@ public:
     QString id() const;
     void setId(const QString &id);
 
-    QString created() const;
-    void setCreated(const QString &created);
+    QDateTime created() const;
+    void setCreated(const QDateTime &created);
 
     EEHMac hMac() const;
     void setHMac(const EEHMac &hMac);
+
+    inline bool operator ==(EEFile file) {
+        return (this->mBucketId == file.mBucketId
+                && this->mMimetype == file.mMimetype
+                && this->mFilename == file.mFilename
+                && this->mFrame == file.mFrame
+                && this->mSize == file.mSize
+                && this->mId == file.mId
+                && this->mCreated == file.mCreated);
+    }
 
 private:
     QString mBucketId;
@@ -41,7 +52,7 @@ private:
     QString mFrame;
     int mSize;
     QString mId;
-    QString mCreated;
+    QDateTime mCreated;
     EEHMac mHMac;
 };
 

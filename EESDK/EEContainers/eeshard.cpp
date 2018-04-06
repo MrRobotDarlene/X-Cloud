@@ -1,6 +1,10 @@
 #include "eeshard.h"
 
-EEShard::EEShard()
+EEShard::EEShard():
+    mIsPartial{false},
+    mToken{""},
+    mOperation{""}
+
 {
 
 }

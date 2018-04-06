@@ -1,16 +1,23 @@
 #include "eeabstractcontainer.h"
 
+#include <QDebug>
+
 EEAbstractContainer::EEAbstractContainer()
 {
+    mUser = "";
+    mIsActive = -1;
+    mStorageSize = -1;
+    mCreated;
+    mId = "";
 }
 
-EEAbstractContainer::EEAbstractContainer(EEAbstractContainer *p) :
-    mUser{p->user()},
-    mIsActive{p->isActive()},
-    mStorageSize{p->storageSize()},
-    mCreated{p->created()},
-    mId{p->id()}
+EEAbstractContainer::EEAbstractContainer(EEAbstractContainer *p)
 {
+    mUser = p->user();
+    mIsActive = p->isActive();
+    mStorageSize = p->storageSize();
+    mCreated = p->created();
+    mId = p->id();
 }
 
 QString EEAbstractContainer::user() const
@@ -33,12 +40,12 @@ void EEAbstractContainer::setIsActive(bool isActive)
     mIsActive = isActive;
 }
 
-QString EEAbstractContainer::created() const
+QDateTime EEAbstractContainer::created() const
 {
     return mCreated;
 }
 
-void EEAbstractContainer::setCreated(const QString &created)
+void EEAbstractContainer::setCreated(const QDateTime &created)
 {
     mCreated = created;
 }

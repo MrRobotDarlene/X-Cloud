@@ -24,8 +24,3 @@ void EEModel::setName(const QString &name)
 {
     mName = name;
 }
-
-bool EEModel::operator ==(EEModel &m)
-{
-    return (this->name() == m.name() && this->updated() == m.updated());
-}

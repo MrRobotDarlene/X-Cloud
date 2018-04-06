@@ -1,5 +1,6 @@
 #include "eeregister.h"
 #include "ui_eeregister.h"
+#include "eesettingsclass.h"
 
 #include <QCryptographicHash>
 
@@ -14,10 +15,13 @@ EERegister::EERegister(EESDK *sdk, QWidget *parent) :
     ui->lineEditPasswordRepeat->setStyleSheet("border: 1px solid gray");
 
     connect(sdk, SIGNAL(requestError(EEError,QString)), this, SLOT(requestError(EEError,QString)));
+    connect(sdk, SIGNAL(userRegistered(EEUser)), this, SLOT(userRegistered(EEUser)));
 }
 
 EERegister::~EERegister()
 {
+    qDebug() << typeid(*this).name() << " : " << __FUNCTION__;
+
     delete ui;
 }
 
@@ -61,7 +65,10 @@ void EERegister::warningMessage(QString message, EERegisterField field)
 
     ui->labelWarning->setText(message);
 }
-
+/**
+ * @brief EERegister::on_pushButtonRegister_clicked
+ * Try to registrate user
+ */
 void EERegister::on_pushButtonRegister_clicked()
 {
     bool lProceed = true;
@@ -85,7 +92,7 @@ void EERegister::on_pushButtonRegister_clicked()
 
     if (lProceed) {
         if (isPasswordValid() && isEmailValid()) {
-            QString lPassword = QString(QCryptographicHash::hash((ui->lineEditPassword->text().toUtf8()),QCryptographicHash::Sha256).toHex());
+            QString lPassword = QString(QCryptographicHash::hash((ui->lineEditPassword->text().toUtf8()), QCryptographicHash::Sha256).toHex());
             sdk()->registerUser(ui->lineEditEmail->text(), lPassword);
         } else if (!isPasswordValid()) {
             warningMessage(tr("Password doesn't match"), EERegisterFieldPasswordRepeat);
@@ -111,4 +118,21 @@ void EERegister::requestError(EEError err, QString method)
     if (method == MTD_REGISTER_USER) {
         warningMessage(err.message(), EERegisterFieldNone);
     }
+}
+/**
+ * @brief EERegister::userRegistered
+ * After succesful registration - log user in
+ */
+void EERegister::userRegistered(EEUser)
+{
+    if (ui->checkBoxRemember->isChecked()) {
+        EESettingsClass::getInstance().setSettingsValue(SettingsOptions::Email, ui->lineEditEmail->text());
+        EESettingsClass::getInstance().setSettingsValue(SettingsOptions::Password, ui->lineEditEmail->text());
+    }
+
+    EESettingsClass::getInstance().setSettingsValue(SettingsOptions::Remember, static_cast<int>(ui->checkBoxRemember->isChecked()));
+
+    close();
+    emit userRegistredLoggedIn();
+
 }

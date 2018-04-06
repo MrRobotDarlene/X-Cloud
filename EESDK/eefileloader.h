@@ -6,11 +6,6 @@
 
 #include <QObject>
 
-typedef enum {
-    EEFileLoaderStateUpload,
-    EEFileLoaderStateDownload
-} EEFileLoaderState;
-
 class EEFileLoader;
 
 extern EEFileLoader *gCryptoPointer;
@@ -20,6 +15,7 @@ class EEFileLoader : public QObject
     Q_OBJECT
 public:
     explicit EEFileLoader(EESDK *sdk, QObject *parent = nullptr);
+    ~EEFileLoader();
 
     /**
      * @brief EEFileLoader::uploadData
@@ -39,32 +35,28 @@ public:
      */
     void downloadFile(QString bucketId, QString fileId, QString fileName);
 
-
+    /**
+     * @brief EEFileLoader::deleteFile
+     * Delete file from cloud usign bucketid and its file
+     * @param bucketId
+     * @param fileId
+     */
+    void deleteFile(QString bucketId, QString fileId);
+    /**
+     * @brief EEFileLoader::handleCallbackResult
+     * Method, which handle callback about download/upload from .c program
+     * @param callResult
+     */
     void handleCallbackResult(CallbackResult callResult);
 
 
-private:
-    EEShardRequest makeShards();
 signals:
     void fileUploaded();
     void fileDownloaded();
-    void moveToTheNextFile();
-
-private slots:
-    void frameCreated(EEFrame);
-    void shardAddedToFrame(EEShard);
-    void shardsReceived(QList<EEShard>);
-
-    void requestError(EEError, QString method);
+    void fileDeleted();
 
 private:
     EESDK *mSdk;
-    EEFileLoaderState mState;
-    QString mBucketId;
-    QString mFileId;
-    QString mFileName;
-    QByteArray mData;
-    EEFrame mFrame;
 };
 
 #endif // EEAPI_H

@@ -11,7 +11,7 @@
    </rect>
   </property>
   <property name="windowTitle">
-   <string>Login to X CLoud</string>
+   <string>Login to X Cloud</string>
   </property>
   <layout class="QVBoxLayout" name="verticalLayout_2">
    <item>

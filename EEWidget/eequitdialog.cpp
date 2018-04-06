@@ -2,6 +2,8 @@
 #include "ui_eequitdialog.h"
 
 #include <QCloseEvent>
+#include <QApplication>
+#include <QDebug>
 
 EEQuitDialog::EEQuitDialog(QWidget *parent) :
     QDialog(parent),
@@ -12,17 +14,22 @@ EEQuitDialog::EEQuitDialog(QWidget *parent) :
 
 void EEQuitDialog::accept()
 {
+    qDebug() << typeid(*this).name() << " : " << __FUNCTION__;
     setResult(QDialog::Accepted);
     hide();
+    QApplication::quit();
 }
 
 void EEQuitDialog::reject()
 {
+    qDebug() << typeid(*this).name() << " : " << __FUNCTION__;
     setResult(QDialog::Rejected);
     hide();
 }
 
 EEQuitDialog::~EEQuitDialog()
 {
+    qDebug() << typeid(*this).name() << " : " << __FUNCTION__;
+
     delete ui;
 }

@@ -11,12 +11,42 @@ EEFolderModel::EEFolderModel(EEModel *parent) : EEModel(parent)
 EEFolderModel::~EEFolderModel()
 {
     if (mSubdirs.size() > 0) {
+        qDeleteAll(mSubdirs);
         mSubdirs.clear();
     }
 
     if (mFiles.size() > 0) {
+        qDeleteAll(mFiles);
         mFiles.clear();
     }
+}
+/**
+ * @brief EEFolderModel::cleanChildrenList
+ * delete all subfolders and subfiles
+ */
+void EEFolderModel::cleanChildrenList()
+{
+    if (mSubdirs.size() > 0) {
+        qDeleteAll(mSubdirs);
+        mSubdirs.clear();
+    }
+
+    if (mFiles.size() > 0) {
+        qDeleteAll(mFiles);
+        mFiles.clear();
+    }
+}
+
+bool EEFolderModel::isEmpty()
+{
+    bool lIsEmpty = false;
+    if (!mSubdirs.count()) {
+        if (!mFiles.count()) {
+            lIsEmpty = true;
+        }
+    }
+
+    return lIsEmpty;
 }
 /**
  * @brief EEFolderModel::addChild
@@ -25,15 +55,15 @@ EEFolderModel::~EEFolderModel()
  * @param child
  * @return
  */
-bool EEFolderModel::addFolder(EEFolderModel *child)
+bool EEFolderModel::addFolder(EEFolderModel *folder)
 {
-    if (child != nullptr) {
-        foreach (EEFolderModel *tmpChild, mSubdirs) {
-            if (child == tmpChild) {
+    if (folder != nullptr) {
+        foreach (EEFolderModel *tmpFolder, mSubdirs) {
+            if (folder->name() == tmpFolder->name()) {
                 return false;
             }
         }
-        mSubdirs.append(child);
+        mSubdirs.append(folder);
         return true;
     } else {
         return false;
@@ -44,7 +74,7 @@ bool EEFolderModel::addFile(EEModel *file)
 {
     if (file != nullptr) {
         foreach (EEFolderModel *tmpFile, mSubdirs) {
-            if (file == tmpFile) {
+            if (file->name() == tmpFile->name()) {
                 return false;
             }
         }
@@ -58,12 +88,12 @@ bool EEFolderModel::addFile(EEModel *file)
  * @brief EEFolderModel::getChildrenList
  * @return
  */
-QList<EEFolderModel *> EEFolderModel::getFolderList() const
+QList<EEFolderModel *> EEFolderModel::folderList() const
 {
     return mSubdirs;
 }
 
-bool EEFolderModel::delelteFile(EEModel *file)
+bool EEFolderModel::deleteFile(EEModel *file)
 {
     if (file != nullptr) {
         return mFiles.removeOne(file);
@@ -72,16 +102,16 @@ bool EEFolderModel::delelteFile(EEModel *file)
     return false;
 }
 
-bool EEFolderModel::deleteFolder(EEFolderModel *child)
+bool EEFolderModel::deleteFolder(EEFolderModel *folder)
 {
-    if (child != nullptr) {
-        return mSubdirs.removeOne(child);
+    if (folder != nullptr) {
+        return mSubdirs.removeOne(folder);
     }
 
     return false;
 }
 
-QList<EEModel *> EEFolderModel::getFilesList() const
+QList<EEModel *> EEFolderModel::filesList() const
 {
     return mFiles;
 }

@@ -268,10 +268,10 @@ static int upload_file(s_env_t *env, char *bucket_id, const char *file_path)
 
 
     upload_state_t *state = bridge_store_file(env,
-                                                          &upload_opts,
-                                                          NULL,
-                                                          progress,
-                                                          fileUploaded);
+                                              &upload_opts,
+                                              NULL,
+                                              progress,
+                                              fileUploaded);
 
     if (!state) {
         return 1;
@@ -294,7 +294,7 @@ void download_signal_handler(uv_signal_t *req, int signum)
 }
 
 static int download_file(s_env_t *env, char *bucket_id,
-                         char *file_id, char *path)
+                         char *file_id, const char *path)
 {
     FILE *fd = NULL;
 
@@ -304,17 +304,17 @@ static int download_file(s_env_t *env, char *bucket_id,
 
         if(access(path, F_OK) != -1 ) {
             printf("Warning: File already exists at path [%s].\n", path);
-            while (strcmp(user_input, "y") != 0 && strcmp(user_input, "n") != 0)
-            {
-                memset(user_input, '\0', BUFSIZ);
-                printf("Would you like to overwrite [%s]: [y/n] ", path);
-                get_input(user_input);
-            }
+//            while (strcmp(user_input, "y") != 0 && strcmp(user_input, "n") != 0)
+//            {
+//                memset(user_input, '\0', BUFSIZ);
+//                printf("Would you like to overwrite [%s]: [y/n] ", path);
+//                get_input(user_input);
+//            }
 
-            if (strcmp(user_input, "n") == 0) {
-                printf("\nCanceled overwriting of [%s].\n", path);
-                return 1;
-            }
+//            if (strcmp(user_input, "n") == 0) {
+//                printf("\nCanceled overwriting of [%s].\n", path);
+//                return 1;
+//            }
 
             unlink(path);
         }
@@ -340,9 +340,11 @@ static int download_file(s_env_t *env, char *bucket_id,
     }
 
     download_state_t *state = bridge_resolve_file(env, bucket_id,
-                                                              file_id, fd, NULL,
-                                                              progress,
-                                                              fileDownloaded);
+                                                  file_id,
+                                                  fd,
+                                                  NULL,
+                                                  progress,
+                                                  fileDownloaded);
 
     if (!state) {
         return 1;
@@ -355,6 +357,7 @@ static int download_file(s_env_t *env, char *bucket_id,
 // initialize event loop and environment
 s_env_t *uploading_env = NULL;
 s_env_t *downloading_env = NULL;
+s_env_t *deletion_env = NULL;
 
 void fileUploaded(int status, file_meta_t *file, void *handle)
 {
@@ -363,48 +366,21 @@ void fileUploaded(int status, file_meta_t *file, void *handle)
 
     if (status != 0) {
         printf("Upload failure: %s\n", s_strerror(status));
-        callBackFunctionFromC(ErrorCallBack);
+        callBackFunctionFromC(ErrorUploadingCallback);
     } else {
         printf("Upload Success! File ID: %s\n", file->id);
-
-
         //should be called after succesful uploading
         callBackFunctionFromC(FileUploaded);
-
-
-        if (uploading_env) {
-            int val = uv_loop_alive(uploading_env->loop);
-
-            printf("Stop begin: ");
-            printf("%d\n", val);
-            uv_stop(uploading_env->loop);
-            val = uv_loop_alive(uploading_env->loop);
-            printf("Stop end : ");
-            printf("%d\n", val);
-        }
-
-
-//        int val = uv_loop_alive(uploading_env->loop);
-
-//        if (uploading_env) {
-//            uv_stop(uploading_env->loop);
-//            printf("Stopped uploading loop!!!\n");
-//        }
-//        val = uv_loop_alive(uploading_env->loop);
-
-
-//        if (!uv_loop_alive(env->loop)) {
-//            printf("Stop alive loop!\n");
-//            uv_stop(env->loop);
-//        } else {
-//            printf("Loop has already stopped\n");
-//        }
-        //clean_values();
+    }
+    if (uploading_env) {
+        uv_stop(uploading_env->loop);
+        printf("Stopped uploading loop!!!\n");
     }
 }
 
 void fileDownloaded(int status, FILE *fd, void *handle)
 {
+    (void)handle;
     printf("- fileDownloaded()");
     printf("\n");
     fclose(fd);
@@ -419,27 +395,56 @@ void fileDownloaded(int status, FILE *fd, void *handle)
             default:
                 printf("Download failure: %s\n", s_strerror(status));
         }
-        callBackFunctionFromC(ErrorCallBack);
+        callBackFunctionFromC(ErrorDownloadingCallBack);
     }
     printf("Download Success!\n");
 
     //should be called after succesful downloading
     callBackFunctionFromC(FileDownloaded);
 
-    uv_stop(downloading_env->loop);
-    printf("Stopped donwloading loop!!!\n");
-
+    if (downloading_env) {
+        uv_stop(downloading_env->loop);
+        printf("Stopped downloading loop!!!\n");
+    }
 }
 
-int start_upload_file(char *bucketId, char *path)
+static void fileDeleted(uv_work_t *work_req, int status)
+{
+    printf("- fileDeleted(uv_work_t *work_req, int status)");
+    assert(status == 0);
+    json_request_t *req = work_req->data;
+    CallbackResult result;
+
+    if (req->status_code == 200 || req->status_code == 204) {
+        printf("File was successfully removed from bucket.\n");
+        result = FileDeleted;
+    } else if (req->status_code == 401) {
+        printf("Invalid user credentials.\n");
+        result = ErrorFileDeletion;
+    } else {
+        printf("Failed to remove file from bucket. (%i)\n", req->status_code);
+        result = ErrorFileDeletion;
+
+    }
+
+    callBackFunctionFromC(result);
+
+    if (deletion_env) {
+        uv_stop(deletion_env->loop);
+        printf("Stopped deletion loop!!!\n");
+    }
+
+
+    json_object_put(req->response);
+    free(req->path);
+    free(req);
+    free(work_req);
+}
+
+int start_upload_file(char *bucketId, const char *path, char *email, char *pass, char *bridge)
 {
     printf("- start_upload_file(char *bucketId, char *path)\n");
-    //clean_downloading_data();
-    char *user = (char*)"";
-    char *pass = (char*)"";
     char *mnemonic = (char*)"";
-
-    char *bridge = (char*)"http://api.internxt.io:6382";
 
     int log_level = 0;
 
@@ -483,7 +488,7 @@ int start_upload_file(char *bucketId, char *path)
         .proto = proto,
         .host  = host,
         .port  = port,
-        .user  = user,
+        .user  = email,
         .pass  = pass
     };
 
@@ -491,6 +496,15 @@ int start_upload_file(char *bucketId, char *path)
         .mnemonic = mnemonic
     };
 
+    //if uploading_env haven't already destroyed
+    if (uploading_env) {
+        if (uploading_env->loop) {
+            uv_loop_close(uploading_env->loop);
+        }
+
+        printf("Try to destroy environment!\n");
+        destroy_env(uploading_env);
+    }
     uploading_env = init_env(&options, &encrypt_options,
                          &http_options, &log_options);
     if (!uploading_env) {
@@ -519,13 +533,6 @@ int start_upload_file(char *bucketId, char *path)
     // run all queued events
     if (uv_run(uploading_env->loop, UV_RUN_DEFAULT)) {
         printf("Uploading loop finished with error message!\n");
-//        uv_loop_close(env->loop);
-//        We aren't using root dir so free it
-//        free(root_dir);
-//        char *keypass = getenv("KEYPASS");
-
-//        cleanup
-//        destroy_env(env);
     } else {
         printf("Succesful uploading loop finish!\n");
     }
@@ -533,16 +540,11 @@ int start_upload_file(char *bucketId, char *path)
     return 0;
 }
 
-int start_download_file(char *bucketId, char *fileId, char *path)
+int start_download_file(char *bucketId, char *fileId, const char *path, char *email, char *pass, char *bridge)
 {
     printf("- start_download_file(char *bucketId, char *fileId, char *path)\n");
-    //clean_uploading_data();
 
-    char *user = (char*)"";
-    char *pass = (char*)"";
     char *mnemonic = (char*)"";
-
-    char *bridge = (char*)"http://api.internxt.io:6382";
 
     int log_level = 0;
 
@@ -585,7 +587,7 @@ int start_download_file(char *bucketId, char *fileId, char *path)
         .proto = proto,
         .host  = host,
         .port  = port,
-        .user  = user,
+        .user  = email,
         .pass  = pass
     };
 
@@ -593,6 +595,16 @@ int start_download_file(char *bucketId, char *fileId, char *path)
         .mnemonic = mnemonic
     };
 
+
+    //if downloading_env haven't already destroyed
+    if (downloading_env) {
+        if (downloading_env->loop) {
+            uv_loop_close(downloading_env->loop);
+        }
+
+        printf("Try to destroy environment!\n");
+        destroy_env(downloading_env);
+    }
 
     downloading_env = init_env(&options, &encrypt_options,
                               &http_options, &log_options);
@@ -628,10 +640,6 @@ int start_download_file(char *bucketId, char *fileId, char *path)
     // run all queued events
     if (uv_run(downloading_env->loop, UV_RUN_DEFAULT)) {
         printf("Downloading loop finished with error message!\n");
-//        uv_loop_close(env->loop);
-
-        // cleanup
-//        destroy_env(env);
     } else {
         printf("Succesful downloading loop finish!\n");
     }
@@ -639,36 +647,124 @@ int start_download_file(char *bucketId, char *fileId, char *path)
     return 0;
 }
 
-void clean_uploading_data()
+int start_delete_file(char *bucketId, char *fileId,  char *email, char *pass, char *bridge)
 {
-    printf("- clean_uploading_info\n");
-    if (uploading_env) {
-        //if (!uv_loop_alive(uploading_env->loop)) {
-        int val = uv_loop_alive(uploading_env->loop);
-        printf("Stop begin: ");
-        printf("%d\n", val);
-        uv_stop(uploading_env->loop);
-        uv_loop_close(uploading_env->loop);
-        val = uv_loop_alive(uploading_env->loop);
-        printf("Stop end : ");
-        printf("%d\n", val);
-        //}
-        //uv_loop_close(env->loop);
-        //destroy_env(uploading_env);
-    }
-    uploading_env = NULL;
+    printf("- start_download_file(char *bucketId, char *fileId, char *path)\n");
 
+    char *mnemonic = (char*)"";
+
+    int log_level = 0;
+
+    char *proxy = getenv("PROXY");
+
+    // Parse the host, part and proto from the bridge url
+    char proto[6];
+    char host[100];
+    int port = 0;
+    sscanf(bridge, "%5[^://]://%99[^:/]:%99d", proto, host, &port);
+
+    if (port == 0) {
+        if (strcmp(proto, "https") == 0) {
+            port = 443;
+        } else {
+            port = 80;
+        }
+    }
+
+    http_options_t http_options;
+    http_options.cainfo_path = NULL;
+    http_options.user_agent = CLI_VERSION;
+    http_options.low_speed_limit = LOW_SPEED_LIMIT;
+    http_options.low_speed_time = LOW_SPEED_TIME;
+    http_options.timeout = HTTP_TIMEOUT;
+
+
+    log_options_t log_options = {
+        .logger = json_logger,
+        .level = log_level
+    };
+
+    if (proxy) {
+        http_options.proxy_url = proxy;
+    } else {
+        http_options.proxy_url = NULL;
+    }
+
+    bridge_options_t options = {
+        .proto = proto,
+        .host  = host,
+        .port  = port,
+        .user  = email,
+        .pass  = pass
+    };
+
+    encrypt_options_t encrypt_options = {
+        .mnemonic = mnemonic
+    };
+
+    //if uploading_env haven't already destroyed
+    if (deletion_env) {
+        if (deletion_env->loop) {
+            uv_loop_close(deletion_env->loop);
+        }
+        printf("Try to destroy environment!\n");
+        destroy_env(deletion_env);
+    }
+    deletion_env = init_env(&options, &encrypt_options,
+                         &http_options, &log_options);
+
+    bridge_delete_file(deletion_env, bucketId, fileId,
+                             NULL, fileDeleted);
+
+
+
+    if (uv_run(deletion_env->loop, UV_RUN_DEFAULT)) {
+        printf("Downloading loop finished with error message!\n");
+    } else {
+        printf("Succesful downloading loop finish!\n");
+    }
+
+    if (!deletion_env) {
+        printf("Environment wasn't initialized!\n");
+        return 1;
+    }
+
+    if (!bucketId) {
+        printf("Wrong bucket id!\n");
+        return 1;
+    }
+
+    if (!fileId) {
+        printf("Wrong file id!\n");
+        return 1;
+    }
+
+    return 0;
 }
 
-void clean_downloading_data()
+
+
+void cleanVariables()
 {
-    printf("-  clean_downloading_info()\n");
+    //if uploading_env haven't already destroyed
+    if (uploading_env) {
+        uv_loop_close(uploading_env->loop);
+
+        printf("Try to destroy uploading environment!\n");
+        destroy_env(uploading_env);
+    }
+
     if (downloading_env) {
-        if (!uv_loop_alive(downloading_env->loop)) {
-            uv_stop(downloading_env->loop);
-        }
-        //uv_loop_close(env->loop);
+        uv_loop_close(downloading_env->loop);
+
+        printf("Try to destroy downaloding environment!\n");
         destroy_env(downloading_env);
     }
-    downloading_env = NULL;
+
+    if (deletion_env) {
+        uv_loop_close(deletion_env->loop);
+
+        printf("Try to destroy deletion environment!\n");
+        destroy_env(deletion_env);
+    }
 }

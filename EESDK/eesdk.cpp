@@ -8,7 +8,7 @@
 
 #define UNDEFINED   "-1"
 
-#define BRIDGE "http://api.internxt.io:6382"
+#define BRIDGE  "http://52.53.254.169"
 
 #define CMD_BUCKETS "buckets"
 #define CMD_TOKENS  "tokens"
@@ -26,6 +26,8 @@ EESDK::EESDK(QObject *parent) : QObject(parent)
 
 EESDK::~EESDK()
 {
+    qDebug() << typeid(*this).name() << " : " << __FUNCTION__;
+
     delete mMgr;
 }
 
@@ -43,6 +45,11 @@ QString EESDK::getEmail() const
 QString EESDK::getPassword() const
 {
     return mPassword;
+}
+
+QString EESDK::getBridge()
+{
+    return BRIDGE;
 }
 
 void EESDK::registerUser(QString email, QString password, QString pubkey, QString referalKey)
@@ -240,4 +247,6 @@ void EESDK::handleResponse(QNetworkReply *reply)
             handleUsersResponse(lMethod, lResponceData, reply);
         }
     }
+
+    //reply->deleteLater();
 }

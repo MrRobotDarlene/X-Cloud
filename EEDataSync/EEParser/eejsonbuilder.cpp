@@ -41,13 +41,13 @@ QJsonObject EEJsonBuilder::buildJsonObject(EEFolderModel *directory)
     lFolderObject.insert(KEY_UPDATED, directory->updated().toString());
 
     QJsonArray lSubdirs;
-    foreach (EEFolderModel *dir, directory->getFolderList()) {
+    foreach (EEFolderModel *dir, directory->folderList()) {
         lSubdirs.push_back(buildJsonObject(dir));
     }
 
     QJsonArray lFiles;
     QJsonObject lFileObject;
-    foreach (EEModel *file, directory->getFilesList()) {
+    foreach (EEModel *file, directory->filesList()) {
         lFileObject.insert(KEY_NAME, file->name());
         lFileObject.insert(KEY_UPDATED, file->updated().toString());
         lFiles.append(lFileObject);

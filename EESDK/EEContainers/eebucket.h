@@ -38,12 +38,12 @@ public:
     }
 
 private:
-    QString mName;
-    QString mEncryptionKey;
+    QString mName = "";
+    QString mEncryptionKey = "";
     QStringList mPublicPermissions;
     QStringList mPubKeys;
-    int mTransfer;
-    int mStorage;
+    int mTransfer = -1;
+    int mStorage = -1;
 };
 
 #endif // EEBUCKET_H

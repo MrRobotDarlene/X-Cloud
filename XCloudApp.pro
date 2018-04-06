@@ -8,8 +8,15 @@ QT       += core gui network
 
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
-TARGET = XCloudApp
+TARGET = "X Cloud"
 TEMPLATE = app
+
+win32 {
+}
+
+macx: {
+    ICON = resources/logo.icns
+}
 
 # The following define makes your compiler emit warnings if you use
 # any feature of Qt which has been marked as deprecated (the exact warnings
@@ -27,12 +34,18 @@ include(EEDataSync/EEDataSync.pri)
 include(EEWidget/EEWidget.pri)
 
 SOURCES +=  main.cpp \
-    eemaincontroller.cpp
+    eemaincontroller.cpp \
+    eesettingsclass.cpp \
+    eelog.cpp
 
 HEADERS += \ 
-    eemaincontroller.h
+    eemaincontroller.h \
+    eesettingsclass.h \
+    eelog.h
 
 RESOURCES += \
     resources.qrc
 
 INCLUDEPATH += $$PWD/EEDataSync/EEParser/
+INCLUDEPATH += $$PWD/EEDataSync/
+INCLUDEPATH += $$PWD/EEBucketSyncronization/

@@ -1,6 +1,9 @@
 #include "eeshardbasic.h"
 
-EEShardBasic::EEShardBasic()
+EEShardBasic::EEShardBasic():
+    mIndex{-1},
+    mHash{""},
+    mSize{-1}
 {
 
 }

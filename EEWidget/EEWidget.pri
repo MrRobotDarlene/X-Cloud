@@ -9,14 +9,21 @@ SOURCES +=  \
     $$PWD/eelogin.cpp \
     $$PWD/eeregister.cpp \
     $$PWD/eequitdialog.cpp \
+    $$PWD/eetrayicon.cpp \
+    $$PWD/eesyncronizationfolderform.cpp \
+    $$PWD/eemessagebox.cpp
 
 HEADERS += \
     $$PWD/eewidget.h \
     $$PWD/eelogin.h \
     $$PWD/eeregister.h \
     $$PWD/eequitdialog.h \
+    $$PWD/eetrayicon.h \
+    $$PWD/eesyncronizationfolderform.h \
+    $$PWD/eemessagebox.h
 
 FORMS += \
     $$PWD/eelogin.ui \
     $$PWD/eeregister.ui \
-    $$PWD/eequitdialog.ui
+    $$PWD/eequitdialog.ui \
+    $$PWD/eesyncronizationfolderform.ui

@@ -2,6 +2,7 @@
 #define EEABSTRACTCONTAINER_H
 
 #include <QString>
+#include <QDateTime>
 
 class EEAbstractContainer
 {
@@ -15,8 +16,8 @@ public:
     bool isActive() const;
     void setIsActive(bool isActive);
 
-    QString created() const;
-    void setCreated(const QString &created);
+    QDateTime created() const;
+    void setCreated(const QDateTime &created);
 
     QString id() const;
     void setId(const QString &id);
@@ -28,7 +29,7 @@ private:
     QString mUser;
     int mIsActive;
     int mStorageSize;
-    QString mCreated;
+    QDateTime mCreated;
     QString mId;
 };
 

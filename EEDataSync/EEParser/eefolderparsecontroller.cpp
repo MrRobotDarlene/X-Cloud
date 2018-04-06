@@ -8,22 +8,33 @@
 
 #define ROOT    "/"
 
-EEFolderParseController::EEFolderParseController(QString rootAddress, QObject *parent)
+EEFolderParseController::EEFolderParseController(QObject *parent)
     : QObject(parent),
-    mRootAddress{rootAddress},
     mRootModel{new EEFolderModel}
 {
-    //initialize root folder
-    mRootModel->setName(rootAddress);
 
-    //initialize information about subfolders
-    initializeListOfSubFoldersElements(mRootModel);
 }
 
 EEFolderParseController::~EEFolderParseController()
 {
+    qDebug() << typeid(*this).name() << " : " << __FUNCTION__;
+
     delete mRootModel;
 }
+
+void EEFolderParseController::startSubfoldersInitialization(QString rootAddress)
+{
+    qDebug() << "- EEFolderParseController::startSubfoldersInitialization()";
+
+    mRootAddress = rootAddress;
+    //initialize root folder
+    mRootModel->setName(rootAddress);
+
+    qDebug() << "Folder to check: " << mRootModel->name();
+    //initialize information about subfolders
+    initializeListOfSubFoldersElements(mRootModel);
+}
+
 /**
  * @brief EEController::initializeListOfSubFoldersElements
  * Initialize folders names, last updated and subfolders list
@@ -39,6 +50,7 @@ QDateTime EEFolderParseController::initializeListOfSubFoldersElements(EEFolderMo
         model->setName(ROOT);
     }
 
+    model->cleanChildrenList();
     QDirIterator lIter(lPath, QDir::AllDirs | QDir::Files | QDir::NoDotAndDotDot);
 
     EEFolderModel *lChildModel = nullptr;
@@ -48,14 +60,13 @@ QDateTime EEFolderParseController::initializeListOfSubFoldersElements(EEFolderMo
 
     while (lIter.hasNext() ) {
         QString lName = lIter.next();
-        //lName = lName.remove(0, mRootAddress.size()+1);
 
         if (lIter.fileInfo().isDir()) {
             lChildModel = new EEFolderModel;
 
             lUpdated = lIter.fileInfo().lastModified();
             lChildModel->setName(lName.remove(0, mRootAddress.size()));
-            lChildModel->setUpdated(lUpdated);
+            //lChildModel->setUpdated(lUpdated);
 
             model->addFolder(lChildModel);
 
@@ -63,18 +74,28 @@ QDateTime EEFolderParseController::initializeListOfSubFoldersElements(EEFolderMo
 
             // if folder was modified later than setted value
             // or if its last update time haven't been initialized yet
-            if (lLastChildUpdate.secsTo(model->updated()) < 0
+            if (lLastChildUpdate > model->updated()
                     || model->updated().isNull()) {
                 model->setUpdated(lLastChildUpdate);
             }
         } else if (lIter.fileInfo().isFile()) {
-            lFile = new EEModel;
+            if (lIter.fileInfo().size() > mMaximumFileSize) {
+                qDebug() << "File is too big! Ignore it!";
+            } else {
+                lFile = new EEModel;
 
-            lUpdated = lIter.fileInfo().lastModified();
-            lFile->setName(lName.remove(0, mRootAddress.size()));
-            lFile->setUpdated(lUpdated);
+                lUpdated = lIter.fileInfo().lastModified();
+                lFile->setName(lName.remove(0, mRootAddress.size()));
+                lFile->setUpdated(lUpdated);
 
-            model->addFile(lFile);
+                model->addFile(lFile);
+
+                if (lFile->updated() > model->updated()
+                        || model->updated().isNull()) {
+                    model->setUpdated(lFile->updated());
+
+                }
+            }
         }
     }
 
@@ -90,3 +111,5 @@ QString EEFolderParseController::filePath(QString fileName)
 {
     return mRootAddress + fileName;
 }
+
+

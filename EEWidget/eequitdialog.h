@@ -6,7 +6,10 @@
 namespace Ui {
 class EEQuitDialog;
 }
-
+/**
+ * @brief The EEQuitDialog class
+ * Form, provides possibility to close app
+ */
 class EEQuitDialog : public QDialog
 {
     Q_OBJECT

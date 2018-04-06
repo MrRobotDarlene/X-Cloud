@@ -1,6 +1,8 @@
 #include "eehmac.h"
 
-EEHMac::EEHMac()
+EEHMac::EEHMac():
+    mType{""},
+    mValue{""}
 {
 
 }
