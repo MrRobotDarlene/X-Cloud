@@ -38,14 +38,11 @@ DEFINES += SRCDIR=\\\"$$PWD/\\\"
 
 INCLUDEPATH += $$PWD/../../
 
-INCLUDEPATH += $$PWD/../../EEDataSync/EEParser/
 
 HEADERS += \
     eesdktest.h \
     ../../eesettingsclass.h
 
-
-
-INCLUDEPATH += $$PWD/EEDataSync/EEParser/
-INCLUDEPATH += $$PWD/EEDataSync/
+INCLUDEPATH += $$PWD/EEDataSync/EELocalDataParser/
+INCLUDEPATH += $$PWD/EESDK/EEContainers/
 INCLUDEPATH += $$PWD/EEBucketSyncronization/

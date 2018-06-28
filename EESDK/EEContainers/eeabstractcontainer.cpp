@@ -7,7 +7,6 @@ EEAbstractContainer::EEAbstractContainer()
     mUser = "";
     mIsActive = -1;
     mStorageSize = -1;
-    mCreated;
     mId = "";
 }
 

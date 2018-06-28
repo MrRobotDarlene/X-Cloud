@@ -1,11 +1,19 @@
 #include "eedatetimesyncronizator.h"
-#include "EEDataSync/EEParser/eefoldermodel.h"
-#include "EEContainers/eebucket.h"
-#include "EEDataSync/EEParser/eefolderparsecontroller.h"
-#include "EEDataSync/EEBucketSyncronization/eebucketfacade.h"
-#include "eesdk.h"
-#include "eestatustimer.h"
+#include "EEDataSync/EELocalDataParser/eefoldermodel.h"
+#include "EESDK/EEContainers/eebucket.h"
+#include "eefolderparsecontroller.h"
+#include "eejsonbuilder.h"
 
+#include "EEDataSync/EEBucketSyncronization/eebucketfacade.h"
+#include "EESDK/eesdk.h"
+#include "eestatustimer.h"
+#include "EESDK/EEContainers/eefile.h"
+
+#include <QDateTime>
+#include <QDebug>
+
+
+#include <typeinfo>
 
 //for file time modification
 #include <sys/types.h>
@@ -13,97 +21,60 @@
 #include <utime.h>
 #include <time.h>
 
-EEDateTimeSyncronizator::EEDateTimeSyncronizator(EESDK *sdk, EEBucketFacade *facade, EEFolderParseController *folderParseController, QObject *parent)
+EEDateTimeSyncronizator::EEDateTimeSyncronizator(EESDK *sdk,
+                                                 EEJsonBuilder *builder,
+                                                 EEBucketFacade *facade,
+                                                 EEFolderParseController *folderParseController,
+                                                 QObject *parent)
     : QObject(parent),
       mSdk{sdk},
+      mJsonBuilder{builder},
       mFolderParseController{folderParseController},
       mBucketFacade{facade}
 {
 
 }
-
-
 /**
- * @brief EEDateTimeSyncronizator::initializeDateSyncronization
- * Start process of file's/folder's date syncronization.
- * This method calls after all required data were donwloaded/uploaded
+ * @brief EEDateTimeSyncronizator::initializeFileDateSyncronization
+ * This process starts after files uploading
  */
-void EEDateTimeSyncronizator::initializeDateSyncronization()
+void EEDateTimeSyncronizator::initializeFileDateSyncronization()
 {
-    qDebug() << typeid(*this).name() << " : " << __FUNCTION__;
-    mSdk->getBuckets();
+    qDebug() << "- EEDateTimeSyncronizator::initializeFileDateSyncronization()";
+
+    mSdk->getFilesFromBucket(mBucketFacade->currentBucket()->id());
 }
 /**
- * @brief EEDateTimeSyncronizator::syncronizeLocalDataWithCloud
- * Reinitialized data about local folders/files, start to compare
- * with cloud data
+ * @brief EEDateTimeSyncronizator::synchronizateFileDateFile
+ * Syncronizate datetime for current bucket and file.
+ * Activates after downloading and uploading
  */
-void EEDateTimeSyncronizator::syncronizeLocalDataWithCloud()
+void EEDateTimeSyncronizator::synchronizateFileDateTime()
 {
-    qDebug() << typeid(*this).name() << " : " << __FUNCTION__;
+    qDebug() << "- EEDateTimeSyncronizator::syncFileDateFile()";
+    EEFile *lFile = mBucketFacade->bucketFileByName(mBucketFacade->currentFileName(),
+                                                    mBucketFacade->currentBucket()->id());
+    if (lFile != nullptr) {
+        qDebug() << "Syncronization of files' date for folder";
+        QString lSeparator = "/";
+        QString lBucketName = mBucketFacade->currentBucket()->name();
+        if (lBucketName.at(0) != lSeparator ) {
+            lBucketName = "/" + lBucketName;
+        }
+        QString lFilePath =  mBucketFacade->workingDirectory() + lBucketName;
+        if (lBucketName != lSeparator) {
+            lFilePath += "/";
+        }
 
-    EEFolderModel *lLocalFolderRoot = nullptr;
-
-
-    qDebug() << "Scanning local folders...";
-    mFolderParseController->startSubfoldersInitialization(mBucketFacade->workingDirectory());
-    lLocalFolderRoot = mFolderParseController->rootModel();
-
-    moveThrowFolder(lLocalFolderRoot);
-
-    //restart timer again
-    EEStatusTimer::getInstance().startTimer();
-}
-
-/**
-* @brief EEDateTimeSyncronizator::moveThrowFolder
-* Moves recursively throw folder, syncronizate local files last modification date with cloud date
-* @param model
-*/
-void EEDateTimeSyncronizator::moveThrowFolder(EEFolderModel *model)
-{
-   qDebug() << typeid(*this).name() << " : " << __FUNCTION__;
-
-   EEBucket* lBucket = mBucketFacade->bucketByName(model->name());
-
-   if (lBucket != nullptr) {
-       QList<EEFile>lCloudFiles =  mBucketFacade->filesByBucketId(lBucket->id());
-       QString lBucketName = lBucket->name();
-       QString lSeparator = "/";
-#ifdef WIN32
-       lSeparator = "\\";
-#endif
-       if (lBucketName.at(0) != lSeparator) {
-           lBucketName = lSeparator + lBucketName;
-       }
-
-       QString lFilePath;
-       //special case for root
-       if (lBucketName == "/") {
-           lFilePath = mBucketFacade->workingDirectory() + lBucketName;
-       } else {
-           lFilePath = mBucketFacade->workingDirectory() + lBucketName + lSeparator;
-       }
-
-       for (auto localFile : model->filesList()) {
-           // if time was succesfully modified, set in the program time
-           for (auto cloudFile : lCloudFiles) {
-               QString lCloudPath = lFilePath + cloudFile.filename();
-               QString lLocalPath = mBucketFacade->workingDirectory() + localFile->name();
-               if (lCloudPath == lLocalPath) {
-                   if (setFileModificationTime( lLocalPath, cloudFile.created())) {
-                       localFile->setUpdated(cloudFile.created());
-                   }
-               }
-           }
-       }
-
-       for (auto folder : model->folderList()) {
-           moveThrowFolder(folder);
-       }
-   } else {
-       qDebug() << "Error! Bucket wasn't initialized!!!" << model->name();
-   }
+        //if file time was succesfully modified - update its status in .json file
+        if (setFileModificationTime(lFilePath + lFile->filename(), lFile->created())) {
+            qDebug() << "File time was succesfully modified! Update status...";
+            mJsonBuilder->updateCurrentElementStatus(lFile->created());
+        }
+    } else {
+        qDebug() << "No such file in bucket's files list!!!" << mBucketFacade->currentFileName();
+    }
+    emit fileDateTimeSyncronizated();
 }
 
 /**
@@ -128,7 +99,7 @@ bool EEDateTimeSyncronizator::setFileModificationTime(QString fileName, QDateTim
 
 
     constexpr int lYearDifference = 1900;
-    tm lTimeInformation = {0};
+    tm lTimeInformation;
     utimbuf lTimerModifier;
 
     lTimeInformation.tm_year = updateTime.date().year() - lYearDifference;
@@ -146,10 +117,12 @@ bool EEDateTimeSyncronizator::setFileModificationTime(QString fileName, QDateTim
 
     // Show file time before and after
     if (utime( lFileName, &lTimerModifier ) == -1) {
-        qDebug() << "File time cannot be modified!";
+        qDebug() << "File time cannot be modified!" << lFileName;
     } else {
         qDebug() << "File time succesfully modified! File name : " << lFileName;
         lIsModified = true;
     }
     return lIsModified;
 }
+
+

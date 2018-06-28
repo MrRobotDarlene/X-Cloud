@@ -6,8 +6,6 @@ EEBucket::EEBucket()
 {
     mName = "";
     mEncryptionKey = "";
-    mPublicPermissions;
-    mPubKeys;
     mTransfer = -1;
     mStorage = -1;
 }

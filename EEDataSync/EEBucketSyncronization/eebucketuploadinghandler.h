@@ -1,59 +1,29 @@
 #ifndef EEBUCKETUPLOADINGHANDLER_H
 #define EEBUCKETUPLOADINGHANDLER_H
 
-#include "eebucketdataholder.h"
+#include "eebucketbasehandler.h"
+#include "eefoldermodelholder.h"
+
 
 #include <QQueue>
 
 class EEFolderModel;
 class EEBucket;
+class EEFolderModelHolder;
+
 /**
  * @brief The EEBucketUploadingHandler class
  * Class, which are in charge of buckets uploading.
  * Holds queue of buckets to upload and upload them one by one
  */
-class EEBucketUploadingHandler : public EEBucketDataHolder
+class EEBucketUploadingHandler : public EEBucketBaseHandler, public EEFolderModelHolder
 {
 public:
     EEBucketUploadingHandler(EEBucketDataHolder *bucketData);
     ~EEBucketUploadingHandler();
 
-    void addElementToUploadingBucketQueue(EEFolderModel *newFolder);
-    QQueue<EEFolderModel *> uploadingBucketsQueue() const;
-    void setUploadingBucketQueue(QQueue<EEFolderModel *> queue);
-
-    /**
-     * @brief EEBucketUploadingHandler::setCurrentFolderModelByUploadingBucket
-     * Upload buckets starting from last child to root.
-     * In this case root folder will have last time of creation and it's better for syncronization of the data
-     * @return
-     */
-    bool setCurrentFolderModelByUploadingBucket();
-    EEFolderModel *currentFolderModel() const;
-    QString currentFolderName() const;
-    int currentFolderSize() const;
     QString currentFileNameFromFolderModel() const;
-
-
-    QQueue<EEFile>uploadingFilesQueue() const;
-    void addFileToUploaingFileQueue(EEFile newFile);
-    bool setCurrentFileByUploadingQueue();
-    void addModelToUploadFilesQueue(QString fileName, QString bucketId);
-
-
-    void addQueueToUploadingFileQueue(QQueue<EEFile> fileQueue);
-
-    EEFile currentUploadingFile();
-
-
-protected:
-    EEBucketDataHolder *mBucketData;
-private:
-    QQueue<EEFolderModel*> mUploadingBucketQueue;
-    EEFolderModel *mCurrentFolderModel;
-
-    QQueue<EEFile> mUploadingFilesQueue;
-    EEFile mCurrentFile;
+    void addModelToFilesQueue(QString fileName, QString bucketId);
 };
 
 #endif // EEBUCKETUPLOADINGHANDLER_H

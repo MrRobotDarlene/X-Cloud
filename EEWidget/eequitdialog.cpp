@@ -1,5 +1,6 @@
 #include "eequitdialog.h"
 #include "ui_eequitdialog.h"
+#include "globalconstants.h"
 
 #include <QCloseEvent>
 #include <QApplication>
@@ -10,26 +11,23 @@ EEQuitDialog::EEQuitDialog(QWidget *parent) :
     ui(new Ui::EEQuitDialog)
 {
     ui->setupUi(this);
+
+    this->setWindowTitle(GlobalData::gAppName);
 }
 
 void EEQuitDialog::accept()
 {
-    qDebug() << typeid(*this).name() << " : " << __FUNCTION__;
     setResult(QDialog::Accepted);
     hide();
     QApplication::quit();
 }
 
 void EEQuitDialog::reject()
-{
-    qDebug() << typeid(*this).name() << " : " << __FUNCTION__;
-    setResult(QDialog::Rejected);
+{    setResult(QDialog::Rejected);
     hide();
 }
 
 EEQuitDialog::~EEQuitDialog()
 {
-    qDebug() << typeid(*this).name() << " : " << __FUNCTION__;
-
     delete ui;
 }

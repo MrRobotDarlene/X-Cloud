@@ -4,18 +4,50 @@
 #
 #-------------------------------------------------
 
-QT       += core gui network
+QT       += core gui network webenginewidgets websockets webchannel
 
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
-TARGET = "X Cloud"
-TEMPLATE = app
+unix:!macx {
+	TARGET = "xcloud"
+}
+macx {
+	TARGET = "X Cloud"
+}
 
 win32 {
+        TARGET = "X Cloud"
+}
+TEMPLATE = app
+
+CONFIG += c++11 \
+          openssl-linked \
+          openssl
+
+
+unix:!macx {
+    target.files += ./xcloud
+    target.path += /usr/bin/
+
+    desktop_config.files += resources/xcloud.desktop
+    desktop_config.path += /usr/share/applications/
+
+    logo_config.files += $$PWD/resources/xcloud.png
+    logo_config.path += /usr/share/pixmaps/
+
+
+    INSTALLS += target \
+                desktop_config \
+                logo_config
+}
+
+
+win32: {
+    RC_FILE = xcloud.rc
 }
 
 macx: {
-    ICON = resources/logo.icns
+    ICON = resources/xcloud.icns
 }
 
 # The following define makes your compiler emit warnings if you use
@@ -38,14 +70,25 @@ SOURCES +=  main.cpp \
     eesettingsclass.cpp \
     eelog.cpp
 
-HEADERS += \ 
+HEADERS += \
     eemaincontroller.h \
     eesettingsclass.h \
-    eelog.h
+    eelog.h \
+    globalconstants.h
 
 RESOURCES += \
     resources.qrc
 
-INCLUDEPATH += $$PWD/EEDataSync/EEParser/
+INCLUDEPATH += $$PWD/EEDataSync/EELocalDataParser/
+INCLUDEPATH += $$PWD/EEDataSync/EEDataManager/
+INCLUDEPATH += $$PWD/EEDataSync/EELocalDataParser/
 INCLUDEPATH += $$PWD/EEDataSync/
 INCLUDEPATH += $$PWD/EEBucketSyncronization/
+INCLUDEPATH += $$PWD/EESDK/EEContainers/
+INCLUDEPATH += $$PWD/EESDK/EECrypto/
+INCLUDEPATH += $$PWD/EESDK/EECrypto/EESignInCrypto/
+INCLUDEPATH += $$PWD/EESDK/EECrypto/EEDataCrypto/
+
+
+DISTFILES += \
+    resources/xcloud.desktop

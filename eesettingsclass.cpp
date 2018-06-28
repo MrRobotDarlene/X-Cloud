@@ -1,4 +1,5 @@
 #include "eesettingsclass.h"
+#include "globalconstants.h"
 
 #include <QSettings>
 #include <QApplication>
@@ -12,14 +13,12 @@ const QString EESettingsClass::folderName("folder");
 
 EESettingsClass::EESettingsClass(QObject *parent) : QObject(parent)
 {
-    mPathToSettings = QApplication::applicationDirPath() + QString("//temp//settings_profile.ini");
+    mPathToSettings = QApplication::applicationDirPath() + "/" + GlobalData::gTemporaryFolder + "/" + GlobalData::gSettingProfile;
     mSettings = new QSettings(mPathToSettings, QSettings::IniFormat);
 }
 
 EESettingsClass::~EESettingsClass()
 {
-    qDebug() << typeid(*this).name() << " : " << __FUNCTION__;
-
     delete mSettings;
 }
 

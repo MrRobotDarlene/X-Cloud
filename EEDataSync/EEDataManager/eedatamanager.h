@@ -1,7 +1,6 @@
 #ifndef EEDATAMANAGER_H
 #define EEDATAMANAGER_H
 
-#include "EEContainers/eefile.h"
 
 #include <QObject>
 #include <QQueue>
@@ -17,19 +16,32 @@ class EEDataTreeBuilder;
 class EEDateTimeSyncronizator;
 class EEDataComparator;
 class EEDataLoader;
+class EEDataRemover;
+class EEFile;
+class EEJsonBuilder;
+class EEJsonValidator;
+class EEJsonReader;
 
 enum class EECurrentBucketsState {
     FileUpdating,
     NewBucketsFileUploading,
     NewBucketFilesDownloading,
-    FileDateSyncronization,
     FileStatusCheck,
-    FileDeletion,
+    CloudBucketsClear,
     ExistingBucketFilesUploading,
-    ExistingBucketFilesDownloading
+    ExistingBucketFilesDownloading,
+    BucketFilesDateSyncronization,
+    CorruptedDataDeletion,
+    OutdatedDataDeletion,
+    UnknownState
 };
 
 
+/**
+ * @brief The EEDataManager class
+ * Class, which manages all others classes
+ * with calling needness method from them in different cases
+ */
 class EEDataManager : public QObject
 {
     Q_OBJECT
@@ -53,9 +65,13 @@ public:
     * @brief EEDataManager::stopTimerForDataCheck
     * Stops timer, which was checking status each 1 minute
     */
-   void stopTimerForDataCheck();
-
-   bool isTimerRunning() const;
+    void stopTimerForDataCheck();
+    /**
+     * @brief isTimerRunning
+     * Check is timer running right now
+     * @return
+     */
+    bool isTimerRunning() const;
     /**
      * @brief EEDataManager::initStorage
      * Build bucket queue from root folder
@@ -72,6 +88,12 @@ public:
 
 private:
     /**
+     * @brief EEDataManager::removeCorruptedValueAccordingToJson
+     * Control process of corrupted files buiding and begin process of their removing
+     */
+    void removeCorruptedValueAccordingToJson();
+
+    /**
      * @brief EEDataManager::deleteBucketsFromCloud
      * Delete all data from cloud and start to upload local
      */
@@ -81,7 +103,7 @@ private:
      * Start process of data deletion from cloud
      * It makes to upload new local data there
      */
-    void initializeDeletionProcess();
+    void initializeOutdatedFilesClear();
     /**
      * @brief EEDataManager::buildDataQueue
      * Build queue of buckets. Using in order for folder tree
@@ -89,54 +111,6 @@ private:
      * @param folder
      */
     void buildUploadingDataQueue(EEFolderModel * const folder);
-
-    /**
-     * @brief EEDataManager::createBucket
-     * Create bucket according to current bucket in usage
-     */
-    void createBucket();
-
-    /**
-     * @brief EEDataManager::uploadFile
-     * Upload file to currently using bucket
-     */
-    void uploadFile();
-    /**
-     * @brief EEDataManager::startUseNextBucket
-     * Move to the next bucket. Reset file index and send request for bucket creation
-     */
-    void createNextBucket();
-
-    /**
-     * @brief EEDataManager::getFilesListForCurrentBucket
-     * Create directory for current bucket, if needed
-     * Send get request for this bucket files
-     */
-    void getFilesListForCurrentBucket();
-
-    /**
-     * @brief EEDataManager::useNextBucketForDownloading
-     * Initialize process of files donwloading for setted bucket.
-     * After all files for created buckets were donwloaded - start to download files for existing buckets
-     */
-    void useNextBucketForDownloading();
-
-    /**
-     * @brief EEDataManager::downloadFile
-     * Download file into restore library
-     */
-    void downloadFile();
-
-    /**
-     * @brief EEDataManager::filesListReceived
-     * This method starts to using after receiving list of file
-     * for current bucket and decryption of their names.
-     * Call another method to start process of files downloading
-     * @param files - list of files of backet
-     */
-    void filesListReceived(QList<EEFile> files);
-
-
     /**
      * @brief EEDataManager::setCurrentState
      * Set current program state
@@ -144,21 +118,27 @@ private:
      */
     void setCurrentState(EECurrentBucketsState state);
 
-
-    /**
-    * @brief EEDataManager::uploadNextFiles
-    * Upload files for existing buckets.
-    * After uploading all of the buckets - start process of download required
-    */
-    void uploadNextFiles();
 public slots:
     /**
      * @brief EEDataManager::checkCloudDataStatus
-     * if local data has even been initialized before - download all the data from cloud
+     * Check is json created
+     * If no - go directly to check data actuality
+     * if yes - check for corrupted data and start to remove it from cloud and json
+     */
+    void checkCorruptionDataStatus();
+    /**
+     * @brief EEDataManager::checkDeletionDataStatus
+     * Check is some of data is outdated
+     * Remove folder/file, if needed
+     */
+    void checkDeletionDataStatus();
+    /**
+     * @brief EEDataManager::checkDataActuality
+     *  * if local data has even been initialized before - download all the data from cloud
      * if cloud data hasn't been initalized yet or been initialized just part of data - delete it and upload all of the local
      * In others cases - start to compare all of the folders and files
      */
-    void checkDataStatus();
+    void checkDataActuality();
 
     /**
      * @brief EEDataManager::initDataUpdate
@@ -169,21 +149,19 @@ public slots:
 
 private slots:
     /**
-     * @brief EEDataManager::handleCloudTreeReceived
-     * Calls after data about buckets' files were received
+     * @brief EEDataManager::handleBucketDeletion
+     * deletion possibly can be called in 3 cases:
+     *  files updating, removing outdated buckets or removing all of the files from cloud(if root doesn't exist)
      */
-    void handleCloudTreeReceived();
-    /**
-     * @brief EEDataManager::handleFilesDownloading
-     * Calls after succesful file download
-     */
-    void handleFilesDownloading();
+    void handleBucketDeletion();
 
     /**
-     * @brief EEDataManager::handleFilesUploaded
-     * Calls after file upload
+     * @brief EEDataManager::handleFileDeletion
+     * If updating process is on - keep removing needed files from updating
+     * If corrupted data deletion - update status in json and begin to remove next file
+     * if outdated data deletion - the same as with corrupted, but local files
      */
-    void handleFilesUploaded();
+    void handleFileDeletion();
     /**
      * @brief EEDataManager::handleBucketsListReceive
      * After receiving of the buckets list,
@@ -198,18 +176,28 @@ private slots:
      * using .c decryption
      * @param files - list of files
      */
-    void handleFilesInfoReceived(QList<EEFile> files);
+    void handleFilesInfoReceived(QList<EEFile *> files);
+    /**
+     * @brief handleContinueNextProcess
+     * After date time for file has been syncronizated - call previous process
+     */
+    void handleContinueNextProcess();
 
 private:
     EESDK *mSdk;
     EEFileLoader *mLoader;
     EEFolderParseController *mFolderParseController;
     EEBucketFacade *mBucketFacade;
+
+    EEJsonBuilder *mJsonBuilder;
+    EEJsonValidator *mJsonValidator;
+    EEJsonReader *mJsonReader;
+
     EEDataTreeBuilder *mDataTreeBuilder;
     EEDateTimeSyncronizator *mDateTimeSyncronizator;
     EEDataComparator *mDataComparator;
     EEDataLoader *mDataLoader;
-
+    EEDataRemover *mDataRemover;
 
     EECurrentBucketsState mCurrentState;
 };

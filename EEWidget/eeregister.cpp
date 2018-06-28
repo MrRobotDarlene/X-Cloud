@@ -20,8 +20,6 @@ EERegister::EERegister(EESDK *sdk, QWidget *parent) :
 
 EERegister::~EERegister()
 {
-    qDebug() << typeid(*this).name() << " : " << __FUNCTION__;
-
     delete ui;
 }
 
@@ -60,6 +58,8 @@ void EERegister::warningMessage(QString message, EERegisterField field)
         break;
     case EERegisterFieldPasswordRepeat:
         ui->lineEditPasswordRepeat->setStyleSheet("border: 1px solid red");
+        break;
+    case EERegisterFieldNone:
         break;
     }
 
@@ -115,7 +115,7 @@ void EERegister::on_lineEditPassword_textChanged(const QString&)
 
 void EERegister::requestError(EEError err, QString method)
 {
-    if (method == MTD_REGISTER_USER) {
+    if (method == EESDK::mMtdRegisterUser) {
         warningMessage(err.message(), EERegisterFieldNone);
     }
 }
@@ -134,5 +134,4 @@ void EERegister::userRegistered(EEUser)
 
     close();
     emit userRegistredLoggedIn();
-
 }

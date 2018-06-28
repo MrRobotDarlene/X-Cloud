@@ -9,7 +9,6 @@ EEFile::EEFile():
     mId{""},
     mHMac()
 {
-    mCreated;
 }
 
 QString EEFile::bucketId() const

@@ -11,6 +11,7 @@ class EEWidget : public QWidget
     Q_OBJECT
 public:
     explicit EEWidget(EESDK *sdk, QWidget *parent = 0);
+    virtual ~EEWidget();
     EESDK *sdk() const;
     void setSdk(EESDK *sdk);
     void show();

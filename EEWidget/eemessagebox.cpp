@@ -1,11 +1,12 @@
 #include "eemessagebox.h"
+#include "globalconstants.h"
 
 #include <QDebug>
 #include <QCloseEvent>
 
 EEMessageBox::EEMessageBox()
 {
-
+    this->setWindowTitle(GlobalData::gAppName);
 }
 
 void EEMessageBox::accept()

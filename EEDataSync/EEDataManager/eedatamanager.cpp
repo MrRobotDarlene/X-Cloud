@@ -4,17 +4,22 @@
 #include "EEDataSync/EEBucketSyncronization/eebucketfacade.h"
 #include "eestatustimer.h"
 
-#include "EEContainers/eebucket.h"
+#include "EESDK/EEContainers/eebucket.h"
 
-#include "eesdk.h"
+#include "EESDK/eesdk.h"
 #include "EESDK/eefileloader.h"
+#include "EESDK/EEContainers/eefile.h"
 #include "eedatatreebuilder.h"
 #include "eedatetimesyncronizator.h"
 #include "eedatacomparator.h"
 #include "eedataloader.h"
+#include "eedataremover.h"
 
 #include "crypto.h"
 #include "controller.h"
+#include "eejsonbuilder.h"
+#include "eejsonvalidator.h"
+#include "eejsonreader.h"
 
 #include <QFile>
 #include <QApplication>
@@ -23,7 +28,9 @@
 #include <QFile>
 #include <QTextStream>
 #include <QCryptographicHash>
+#include <QDateTime>
 
+#include <typeinfo>
 
 
 EEDataManager::EEDataManager(EESDK *sdk, EEFileLoader *loader, QString path, QObject *parent) :
@@ -32,19 +39,49 @@ EEDataManager::EEDataManager(EESDK *sdk, EEFileLoader *loader, QString path, QOb
     mLoader{loader},
     mFolderParseController{new EEFolderParseController},
     mBucketFacade{new EEBucketFacade},
+    mJsonBuilder{new EEJsonBuilder(this)},
+    mJsonValidator{new EEJsonValidator(mBucketFacade, mJsonBuilder, this)},
+    mJsonReader{new EEJsonReader(mJsonBuilder)},
     mDataTreeBuilder{new EEDataTreeBuilder(mSdk, mBucketFacade, this)},
-    mDateTimeSyncronizator{new EEDateTimeSyncronizator(mSdk,mBucketFacade, mFolderParseController, this)},
+    mDateTimeSyncronizator{new EEDateTimeSyncronizator(mSdk, mJsonBuilder, mBucketFacade, mFolderParseController, this)},
     mDataComparator{new EEDataComparator(mSdk, mBucketFacade, mFolderParseController, this)},
-    mDataLoader{new EEDataLoader(mSdk, mBucketFacade,mFolderParseController, mLoader, this)}
+    mDataLoader{new EEDataLoader(mSdk, mJsonBuilder, mBucketFacade, mFolderParseController, mLoader, this)},
+    mDataRemover{new EEDataRemover(mSdk, mBucketFacade, mJsonValidator, mLoader, this)},
+    mCurrentState{EECurrentBucketsState::UnknownState}
 {
     qDebug() << typeid(*this).name() << " : " << __FUNCTION__;
 
     mBucketFacade->setWorkingDirectory(path);
 
-    connect(mSdk, SIGNAL(bucketsReceived(QList<EEBucket*>)), this, SLOT(handleBucketsListReceive(QList<EEBucket*>)));
-    connect(mSdk, SIGNAL(filesForBucketReceived(QList<EEFile>)), this, SLOT(handleFilesInfoReceived(QList<EEFile>)));
-    connect(mLoader, SIGNAL(fileUploaded()), this, SLOT(handleFilesUploaded()));
-    connect(mLoader, SIGNAL(fileDownloaded()), this, SLOT(handleFilesDownloading()));
+    connect(mSdk, SIGNAL(bucketsReceived(QList<EEBucket*>)),
+            this, SLOT(handleBucketsListReceive(QList<EEBucket*>)));
+    connect(mSdk, SIGNAL(filesForBucketReceived(QList<EEFile*>)),
+            this, SLOT(handleFilesInfoReceived(QList<EEFile*>)));
+    connect(mSdk, SIGNAL(bucketCreated(EEBucket*)),
+            mDataLoader, SLOT(bucketCreated(EEBucket*)));
+    connect(mSdk, SIGNAL(bucketDeleted(QString)),
+            this, SLOT(handleBucketDeletion()));
+
+    connect(mLoader, SIGNAL(fileDownloaded()),
+            mDateTimeSyncronizator, SLOT(synchronizateFileDateTime()));
+
+    connect(mLoader, SIGNAL(fileDowloadingError()),
+            this,SLOT(handleContinueNextProcess()));
+
+    connect(mLoader, SIGNAL(fileDeleted()),
+            this, SLOT(handleFileDeletion()));
+
+    connect(mLoader, SIGNAL(fileDeletionError()),
+            this,SLOT(handleContinueNextProcess()));
+
+    connect(mLoader, SIGNAL(fileUploaded()),
+            mDateTimeSyncronizator, SLOT(initializeFileDateSyncronization()));
+
+    connect(mLoader, SIGNAL(fileUploadingError()),
+            this,SLOT(handleContinueNextProcess()));
+
+    connect(mDateTimeSyncronizator, SIGNAL(fileDateTimeSyncronizated()),
+            this, SLOT(handleContinueNextProcess()));
 
     connect(&EEStatusTimer::getInstance(),&EEStatusTimer::checkStatusByTimer,
             mDataTreeBuilder, [this] () {
@@ -52,11 +89,11 @@ EEDataManager::EEDataManager(EESDK *sdk, EEFileLoader *loader, QString path, QOb
         mDataTreeBuilder->startBucketsStatusCheck();
     });
 
-    connect(mDataTreeBuilder, SIGNAL(cloudTreeReceived()), this, SLOT(handleCloudTreeReceived()));
+    connect(mDataTreeBuilder, SIGNAL(cloudTreeReceived()), this, SLOT(checkCorruptionDataStatus()));
+    connect(mDataRemover, SIGNAL(corruptedDataRemoved()), this, SLOT(checkDeletionDataStatus()));
 
-    connect(mDataComparator, SIGNAL(dataCompared()), this, SLOT(startDataUpdate()));
-
-    connect(mDataLoader, &EEDataLoader::startFilesUpload, this, [this]() {
+    connect(mDataLoader, SIGNAL(dataDeleted()), this, SLOT(checkDataActuality()));
+    connect(mDataLoader, &EEDataLoader::startFilesUploading, this, [this]() {
         qDebug() << "All neccesary files removed! Start to upload...";
         setCurrentState(EECurrentBucketsState::ExistingBucketFilesUploading);
         //start to upload data for setted before upload list
@@ -64,27 +101,20 @@ EEDataManager::EEDataManager(EESDK *sdk, EEFileLoader *loader, QString path, QOb
     });
 
     connect(mDataLoader, &EEDataLoader::uploadingFinished, this, [this]() {
-        qDebug() << "Uploading finished! Start to download files...";
+        qDebug() << "Uploading finished!"
+                    "Start to download files...";
         setCurrentState(EECurrentBucketsState::NewBucketFilesDownloading);
         mDataLoader->useNextBucketForDownloading();
     });
 
-    connect(mDataLoader, &EEDataLoader::newBucketsDownloaded, this, [this]() {
-        qDebug() << "All new buckets files were donwloaded! Start to donwload files for existing...";
-
+    connect(mDataLoader, &EEDataLoader::startFilesDownloading, this, [this]() {
+        qDebug() << "All new buckets files were downloaded!"
+                    "Start to download files for existing...";
         setCurrentState(EECurrentBucketsState::ExistingBucketFilesDownloading);
         mDataLoader->cloudFilesDownloading();
     });
 
-    connect(mDataLoader, &EEDataLoader::startDateSyncronization, this, [this]() {
-        qDebug() << "Start date syncronization...";
-        setCurrentState(EECurrentBucketsState::FileDateSyncronization);
-        mDateTimeSyncronizator->initializeDateSyncronization();
-    });
-
-    connect(mSdk, SIGNAL(bucketDeleted(QString)), mDataLoader, SLOT(startUpdateNextBucket()));
-    connect(mSdk, SIGNAL(bucketCreated(EEBucket*)), mDataLoader, SLOT(bucketCreated(EEBucket*)));
-    connect(mLoader, SIGNAL(fileDeleted()), mDataLoader, SLOT(cloudFilesUpdating()));
+    connect(mDataComparator, SIGNAL(dataCompared()), this, SLOT(startDataUpdate()));
 }
 
 EEDataManager::~EEDataManager()
@@ -127,7 +157,11 @@ void EEDataManager::stopTimerForDataCheck()
 
     EEStatusTimer::getInstance().stopCheck();
 }
-
+/**
+ * @brief isTimerRunning
+ * Check is timer running right now
+ * @return
+ */
 bool EEDataManager::isTimerRunning() const
 {
     return EEStatusTimer::getInstance().isRunning();
@@ -168,6 +202,24 @@ void EEDataManager::initLocalFromCloud()
     mSdk->getBuckets();
 }
 /**
+ * @brief EEDataManager::removeCorruptedValueAccordingToJson
+ * Control process of corrupted files buiding and begin process of their removing
+ */
+void EEDataManager::removeCorruptedValueAccordingToJson()
+{
+    qDebug() << "- EEDataManager::removeCorruptedValueAccordingToJson()";
+    mJsonValidator->initializeBuildCorruptedFilesList();
+
+    //remove local
+    mDataRemover->removeLocalCorrupted();
+    //remove from json
+    mJsonValidator->removeCorruptedFilesFromJson();
+
+    //remove from cloud and change json status
+    setCurrentState(EECurrentBucketsState::CorruptedDataDeletion);
+    mDataRemover->removeNextCloudFile();
+}
+/**
  * @brief EEDataManager::deleteBucketsFromCloud
  * Delete all data from cloud and start to upload local
  */
@@ -188,11 +240,11 @@ void EEDataManager::deleteBucketsFromCloud()
  * Start process of data deletion from cloud
  * It makes to upload new local data there
  */
-void EEDataManager::initializeDeletionProcess()
+void EEDataManager::initializeOutdatedFilesClear()
 {
     qDebug() << typeid(*this).name() << " : " << __FUNCTION__;
 
-    setCurrentState(EECurrentBucketsState::FileDeletion);
+    setCurrentState(EECurrentBucketsState::CloudBucketsClear);
 
     mSdk->getBuckets();
 }
@@ -214,22 +266,68 @@ void EEDataManager::buildUploadingDataQueue(EEFolderModel * const folder)
 
 /**
  * @brief EEDataManager::checkCloudDataStatus
+ * Check is json created
+ * If no - go directly to check data actuality
+ * if yes - check for corrupted data and start to remove it from cloud and json
+ */
+void EEDataManager::checkCorruptionDataStatus()
+{
+    qDebug() << typeid(*this).name() << " : " << __FUNCTION__;
+
+    mFolderParseController->startSubfoldersInitialization(mBucketFacade->workingDirectory());
+
+    if (mJsonBuilder->isJsonExists()) {
+        qDebug() << "Json is already exists!";
+        removeCorruptedValueAccordingToJson();
+    } else {
+       qDebug() << "Json with files/folders information is not exists yet - create it";
+       checkDataActuality();
+    }
+}
+/**
+ * @brief EEDataManager::checkDeletionDataStatus
+ * Check is some of data is outdated
+ * Remove folder/file, if needed
+ */
+void EEDataManager::checkDeletionDataStatus()
+{
+    qDebug() << "- EEDataManager::checkDeletionDataStatus()";
+    //read of the cloud data into eefolder form
+    mBucketFacade->buildLocalFormFromBucket();
+
+    //read json data into eefolderform
+    mJsonReader->initializeReadingJsonIntoFolderModel();
+    //compare local, json and cloud data
+    mDataComparator->initializeOutdatedDataComparation(mJsonReader->jsonInFolderModelForm(),
+                                                       mBucketFacade->bucketsFolderModelForm());
+    setCurrentState(EECurrentBucketsState::OutdatedDataDeletion);
+
+    //remove local folders
+    mDataRemover->removeOutDatedLocalFolder();
+    //remove folder from json
+    mJsonValidator->removeOutDatedFoldersFromJson();
+    //remove local files
+    mDataRemover->removeLocalOutDated();
+    //remove from json
+    mJsonValidator->removeOutDatedFilesFromJson();
+    //delete buckets/files from bucket
+    mDataLoader->deleteNextBucket();
+}
+/**
+ * @brief EEDataManager::checkDataActuality
  * if local data has even been initialized before - download all the data from cloud
  * if cloud data hasn't been initalized yet or been initialized just part of data - delete it and upload all of the local
  * In others cases - start to compare all of the folders and files
  */
-void EEDataManager::checkDataStatus()
+void EEDataManager::checkDataActuality()
 {
     qDebug() << typeid(*this).name() << " : " << __FUNCTION__;
 
     EEBucket* lCloudLastFolder = mBucketFacade->rootBucket();
 
     if (lCloudLastFolder != nullptr ) {
-
         mFolderParseController->startSubfoldersInitialization(mBucketFacade->workingDirectory());
-
         EEFolderModel *lLocalFolderRoot = mFolderParseController->rootModel();
-
         bool lIsLocalCorrect = false;
         if (lLocalFolderRoot != nullptr) {
             if (!lLocalFolderRoot->isEmpty()) {
@@ -245,17 +343,17 @@ void EEDataManager::checkDataStatus()
         }
 
         if (lIsLocalCorrect) {
-            qDebug() <<" LOCAL FOLDER IS NOT EMPTY AND EXISTS - START TO COMPARE DATA!!!";
+            qDebug() << "LOCAL FOLDER IS NOT EMPTY AND EXISTS - START TO COMPARE DATA!!!";
             mDataComparator->startCompareData();
         } else {
-            qDebug() << "Local directory is empty!!! Start to donwload all the data from cloud...";
+            qDebug() << "Local directory is empty!!! Start to download all the data from cloud...";
             initLocalFromCloud();
         }
 
     } else {
         //if cloud data hasn't been initalized or initalized wrong way
         qDebug() << "No information about root folder on the cloud! Try to upload it first";
-        initializeDeletionProcess();
+        initializeOutdatedFilesClear();
     }
 }
 
@@ -284,68 +382,61 @@ void EEDataManager::setCurrentState(EECurrentBucketsState state)
 }
 
 /**
- * @brief EEDataManager::handleCloudTreeReceived
- * Calls after data about buckets' files were received
+ * @brief EEDataManager::handleBucketDeletion
+ * deletion possibly can be called in 3 cases:
+ *  files updating, removing outdated buckets or removing all of the files from cloud(if root doesn't exist)
  */
-void EEDataManager::handleCloudTreeReceived()
+void EEDataManager::handleBucketDeletion()
 {
-    if (mCurrentState == EECurrentBucketsState::FileStatusCheck) {
-        qDebug() << "Start check data status!";
-        checkDataStatus();
-    } else if (mCurrentState == EECurrentBucketsState::FileDateSyncronization) {
-        qDebug() << "Start syncronizate data";
-        mDateTimeSyncronizator->syncronizeLocalDataWithCloud();
-    } else {
-        qDebug() << "Unknown state!";
+    if (mCurrentState == EECurrentBucketsState::FileUpdating) {
+        mJsonBuilder->updateCurrentElementStatus();
+        mDataLoader->updateNextBucket();
+    } else if (mCurrentState == EECurrentBucketsState::OutdatedDataDeletion) {
+        //remove from json
+        qDebug() << "Try to remove folder from json: " << mBucketFacade->currentBucket()->name();
+        mJsonBuilder->initializeRemoveObjectFromJson(mBucketFacade->currentBucket()->name());
+
+        //remove bucket from cloud treew
+        QString lBucketId = mBucketFacade->currentBucket()->id();
+        mBucketFacade->removeBucketByBucketId(lBucketId);
+        mBucketFacade->removeBucketFromTreeById(lBucketId);
+
+        mDataLoader->deleteNextBucket();
     }
 }
 
 /**
- * @brief EEDataManager::handleFilesDownloading
- * Calls after succesful file download
+ * @brief EEDataManager::handleFileDeletion
+ * If updating process is on - keep removing needed files from updating
+ * If corrupted data deletion - update status in json and begin to remove next file
+ * if outdated data deletion - the same as with corrupted, but local files
  */
-void EEDataManager::handleFilesDownloading()
+void EEDataManager::handleFileDeletion()
 {
     qDebug() << typeid(*this).name() << " : " << __FUNCTION__;
 
-    switch (mCurrentState) {
-    case EECurrentBucketsState::ExistingBucketFilesDownloading:
-        qDebug() << "Files for existing bucket uploading...";
-        mDataLoader->cloudFilesDownloading();
-        break;
-    case EECurrentBucketsState::NewBucketFilesDownloading:
-        qDebug() << "New bucket files downloading buckets list";
-    case EECurrentBucketsState::FileUpdating:
-        qDebug() << "Keep updating...";
-        mDataLoader->startDataDownloading();
-        break;
-    default:
-        qDebug() << "Unknown file donwloading state!";
-        break;
-    }
-}
-/**
- * @brief EEDataManager::handleFilesUploaded
- * Calls after file upload
- */
-void EEDataManager::handleFilesUploaded()
-{
-    qDebug() << typeid(*this).name() << " : " << __FUNCTION__;
-
-    switch (mCurrentState) {
-    case EECurrentBucketsState::ExistingBucketFilesUploading:
-        qDebug() << "Files for existing bucket uploading...";
-        mDataLoader->uploadNextFiles();
-        break;
-    case EECurrentBucketsState::NewBucketsFileUploading:
-        qDebug() << "New Buckets File Uploading buckets list";
-    case EECurrentBucketsState::FileUpdating:
-        qDebug() << "Keep updating...";
-        mDataLoader->uploadBucketData();
-        break;
-    default:
-        qDebug() << "Unknown file uploading state!";
-        break;
+    if (mCurrentState == EECurrentBucketsState::FileUpdating) {
+        //remove file from tree
+        mBucketFacade->removeFileFromBucket(mBucketFacade->currentUpdatingFile()->filename(),
+                                            mBucketFacade->currentUpdatingFile()->bucketId());
+        mDataLoader->cloudFilesUpdating();
+    } else if (mCurrentState == EECurrentBucketsState::CorruptedDataDeletion) {
+        //remove from tree of cloud data
+        mBucketFacade->removeFileFromBucket(mBucketFacade->firstCorruptedElement()->filename(),
+                                            mBucketFacade->firstCorruptedElement()->bucketId());
+        //update corrupted element status in json
+        mJsonValidator->updateCorruptedFirstElementStatus();
+        //keep updating next file
+        mDataRemover->removeNextCloudFile();
+    } else if (mCurrentState == EECurrentBucketsState::OutdatedDataDeletion) {
+        EEBucket *lBucket = mBucketFacade->bucketById(mBucketFacade->currentDeletionFile()->bucketId());
+        QString lFileName = mBucketFacade->currentDeletionFile()->filename();
+        //remove from cloud tree
+        mBucketFacade->removeFileFromBucket(lFileName, lBucket->id());
+        //remove from json
+        mJsonBuilder->initializeRemoveObjectFromJson(lBucket->name(), lFileName);
+        //move to the next file for deletion
+        mDataLoader->deleteNextFile();
     }
 }
 
@@ -370,10 +461,7 @@ void EEDataManager::handleBucketsListReceive(QList<EEBucket*> buckets)
     } else if (mCurrentState == EECurrentBucketsState::FileStatusCheck) {
         qDebug() << "Check status of files!";
         mDataTreeBuilder->getFilesInfoForNextBucket();
-    } else if (mCurrentState == EECurrentBucketsState::FileDateSyncronization) {
-        qDebug() << "Date updating buckets list";
-        mDataTreeBuilder->getFilesInfoForNextBucket();
-    } else if (mCurrentState == EECurrentBucketsState::FileDeletion){
+    } else if (mCurrentState == EECurrentBucketsState::CloudBucketsClear){
         deleteBucketsFromCloud();
     } else {
         qDebug() << "UNKNOWN STATE!";
@@ -387,15 +475,13 @@ void EEDataManager::handleBucketsListReceive(QList<EEBucket*> buckets)
  * using .c decryption
  * @param files - list of files
  */
-void EEDataManager::handleFilesInfoReceived(QList<EEFile> files)
+void EEDataManager::handleFilesInfoReceived(QList<EEFile*> files)
 {
-    qDebug() << typeid(*this).name() << " : " << __FUNCTION__;
-
     for (auto &file : files) {
-        QString lFileName = file.filename();
-        EEBucket* lFileBucket = mBucketFacade->bucketById(file.bucketId());
+        QString lFileName = file->filename();
+        EEBucket* lFileBucket = mBucketFacade->bucketById(file->bucketId());
         if (lFileBucket == nullptr) {
-            qDebug() << "Error! Bucket is not initialized!!!" << file.bucketId();
+            qDebug() << "Error! Bucket is not initialized!!!" << file->bucketId();
             return;
         }
 
@@ -410,25 +496,67 @@ void EEDataManager::handleFilesInfoReceived(QList<EEFile> files)
         char *result;
 
         if (!decrypt_file_name(lMnenmonic, lBucketId, lFileNameChar, &result)) {
-            qDebug() << "File name has been succesfully decrypted!";
             lFileName = QString::fromUtf8(result);
         } else {
             qDebug() << "File name couldn't be decrypted!";
             lFileName = "Unknown_Name";
         }
-        file.setFilename(lFileName);
+        file->setFilename(lFileName);
     }
 
-    if (mCurrentState == EECurrentBucketsState::NewBucketFilesDownloading) {
+    //add all cloud files from bucket to map
+    mBucketFacade->addFilesListByBucketId(mBucketFacade->currentBucket()->id(), files);
+
+    switch (mCurrentState) {
+    case EECurrentBucketsState::NewBucketFilesDownloading:
         qDebug() << "Files list for downloading received!";
-        mDataLoader->filesListReceived(files);
-    } else if (mCurrentState == EECurrentBucketsState::FileStatusCheck) {
+        mDataLoader->downloadingFilesListReceived();
+        break;
+    case EECurrentBucketsState::FileStatusCheck:
         qDebug() << "File list for checking received!";
-        mDataTreeBuilder->setFilesInformationForBucket(files);
-    } else if (mCurrentState == EECurrentBucketsState::FileDateSyncronization) {
-        qDebug() << "File date syncronization";
-        mDataTreeBuilder->setFilesInformationForBucket(files);
-    } else {
+        mDataTreeBuilder->getFilesInfoForNextBucket();
+        break;
+    case EECurrentBucketsState::ExistingBucketFilesUploading:
+    case EECurrentBucketsState::NewBucketsFileUploading:
+    case EECurrentBucketsState::FileUpdating:
+        qDebug() << "Syncronizate date time for file!";
+        mDateTimeSyncronizator->synchronizateFileDateTime();
+        break;
+    default:
         qDebug() << "Unknown file state";
+        break;
+    }
+}
+
+/**
+ * @brief handleContinueNextProcess
+ * After date time for file has been syncronizated - call previous process
+ */
+void EEDataManager::handleContinueNextProcess()
+{
+    qDebug() << "- handleContinueNextProcess()";
+
+    switch (mCurrentState) {
+    case EECurrentBucketsState::ExistingBucketFilesUploading:
+        qDebug() << "Files for existing bucket uploading...";
+        mDataLoader->uploadNextFiles();
+        break;
+    case EECurrentBucketsState::NewBucketsFileUploading:
+         qDebug() << "New Buckets File Uploading buckets list";
+    case EECurrentBucketsState::FileUpdating:
+         qDebug() << "Keep updating...";
+         mDataLoader->uploadBucketData();
+         break;
+    case EECurrentBucketsState::NewBucketFilesDownloading:
+         qDebug() << "New bucket files downloading...";
+         mDataLoader->startDataDownloading();
+        break;
+    case EECurrentBucketsState::ExistingBucketFilesDownloading:
+        qDebug() << "Files for existing bucket downloading...";
+        mDataLoader->cloudFilesDownloading();
+        break;
+    default:
+        qDebug() << "Unknown previous state state";
+        break;
     }
 }

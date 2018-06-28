@@ -1,6 +1,6 @@
 #include "eefileloader.h"
 #include "eesdkparser.h"
-#include "../EEDataSync/EEParser/eefolderparsecontroller.h"
+#include "eefolderparsecontroller.h"
 #include "controller.h"
 
 #include <QDebug>
@@ -26,10 +26,8 @@ EEFileLoader::~EEFileLoader()
  * @param bucketId - id of bucket
  * @param name - path to file on the local machine
  */
-void EEFileLoader::uploadData(QString bucketId, QString name)
+void EEFileLoader::uploadData(const QString &bucketId, const QString &name)
 {
-//    name = "\""+ name + "\"";
-
     //required for correct casting
     QByteArray lBucketIdByteArray = bucketId.toLatin1();
     QByteArray lFileNameByteArray = name.toLatin1();
@@ -39,13 +37,17 @@ void EEFileLoader::uploadData(QString bucketId, QString name)
     char *lFilePath = lFileNameByteArray.data();
 
     qDebug() << "File to upload path:" << lFilePath;
+
+    //char *bridge = (char*)"https://api.internxt.com:6382";
+    //char* lPhoneNumber = (char*)"+380970892691";
+
     if (start_upload_file(lBucketCharId,
                           lFilePath,
-                          mSdk->getEmail().toUtf8().data(),
+                          mSdk->getLogin().toUtf8().data(),
                           mSdk->getPassword().toUtf8().data(),
                           mSdk->getBridge().toUtf8().data())) {
         qDebug() << "Unsuccesful file uploading! Move to the next file!";
-        emit fileUploaded();
+        emit fileUploadingError();
     }
 }
 
@@ -57,10 +59,8 @@ void EEFileLoader::uploadData(QString bucketId, QString name)
  * @param fileId
  * @param fileName
  */
-void EEFileLoader::downloadFile(QString bucketId, QString fileId, QString fileName)
+void EEFileLoader::downloadFile(const QString &bucketId, const QString &fileId, const QString &fileName)
 {
-//    fileName = "\""+ fileName + "\"";
-
     //required for correct casting
     QByteArray lBucketIdByteArray = bucketId.toLatin1();
     QByteArray lFileIdByteArray = fileId.toLatin1();
@@ -75,11 +75,11 @@ void EEFileLoader::downloadFile(QString bucketId, QString fileId, QString fileNa
     if (start_download_file(lBucketCharId,
                         lFileCharId,
                         lFilePath,
-                        mSdk->getEmail().toUtf8().data(),
+                        mSdk->getLogin().toUtf8().data(),
                         mSdk->getPassword().toUtf8().data(),
                         mSdk->getBridge().toUtf8().data())) {
         qDebug() << "Unsuccesful file downloading! Move to the next file...";
-        emit fileDownloaded();
+        emit fileDowloadingError();
     }
 }
 /**
@@ -88,9 +88,8 @@ void EEFileLoader::downloadFile(QString bucketId, QString fileId, QString fileNa
  * @param bucketId
  * @param fileId
  */
-void EEFileLoader::deleteFile(QString bucketId, QString fileId)
+void EEFileLoader::deleteFile(const QString &bucketId, const QString &fileId)
 {
-
     QByteArray lBucketIdByteArray = bucketId.toLatin1();
     QByteArray lFileIdByteArray = fileId.toLatin1();
 
@@ -99,11 +98,11 @@ void EEFileLoader::deleteFile(QString bucketId, QString fileId)
     char *lFileCharId = lFileIdByteArray.data();
 
     if (start_delete_file(lBucketCharId, lFileCharId,
-                        mSdk->getEmail().toUtf8().data(),
+                        mSdk->getLogin().toUtf8().data(),
                         mSdk->getPassword().toUtf8().data(),
                         mSdk->getBridge().toUtf8().data())) {
         qDebug() << "Unsuccesful file deletion!";
-        emit fileDeleted();
+        emit fileDeletionError();
     }
 
 }
@@ -118,16 +117,23 @@ void EEFileLoader::handleCallbackResult(CallbackResult callResult)
     switch (callResult) {
     case ErrorDownloadingCallBack:
         qDebug() << "Error! Unsuccesful downloading!";
+        emit fileDowloadingError();
+        break;
     case FileDownloaded:
+        qDebug() << "Emit file downloaded!";
         emit fileDownloaded();
         break;
     case ErrorUploadingCallback:
         qDebug() << "Error! Unsuccesful uploading!";
+        emit fileUploadingError();
+        break;
     case FileUploaded:
+        qDebug() << "Emit file uploaded!";
         emit fileUploaded();
         break;
     case ErrorFileDeletion:
         qDebug() << "Unsuccesful file deletion!";
+        emit fileDeletionError();
         break;
     case FileDeleted:
         emit fileDeleted();

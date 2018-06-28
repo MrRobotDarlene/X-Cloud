@@ -12,6 +12,9 @@ class EEBucketDataHolder;
 class EEBucketUploadingHandler;
 class EEBucketDownloadingHandler;
 class EEBucketUpdatingHandler;
+class EEBucketDeletionHandler;
+class EEOutdatedDataHolder;
+class EEBaseOutdatedDataHolder;
 
 
 class EEFolderModel;
@@ -20,7 +23,7 @@ class EEModel;
 /**
  * @brief The EEBucketWrapper class
  * Class - facade, which is manage work with all processes related
- * to download/upload data from cloud
+ * to download, upload, update or delete data from/to cloud
  */
 class EEBucketFacade : public QObject
 {
@@ -40,10 +43,10 @@ public:
     QString currentUploadingFileNameFromFolderModel() const;
 
     bool setCurrentFileByUploadingQueue();
-    EEFile currentUploadingFile();
+    EEFile *currentUploadingFile();
 
     void addModelToUploadFilesQueue(QString fileName, QString bucketId);
-    QQueue<EEFile> uploadingFilesQueue() const;
+    QQueue<EEFile *> uploadingFilesQueue() const;
 
 
     //for both
@@ -59,14 +62,22 @@ public:
     EEBucket *currentBucket() const;
     EEBucket *bucketById(QString bucketId) const;
 
-    void addFilesListByBucketId(QString bucket, QList<EEFile> files);
-    QList<EEFile> filesByBucketId(QString bucketId);
+    void setCurrentFileName(QString file);
+    QString currentFileName() const;
+
+    void addFilesListByBucketId(QString bucket, QList<EEFile *> files);
+    QList<EEFile *> filesByBucketId(QString bucketId);
+    EEFile *bucketFileByName(QString fileName, QString bucketId);
+    bool removeFileFromBucket(QString fileName, QString bucketId);
+
 
     bool setNextCurrentBucket();
 
     bool removeBucketByBucketId(QString bucketId);
+    bool removeBucketFromTreeById(QString bucketId);
 
-
+    void buildLocalFormFromBucket();
+    EEFolderModel *bucketsFolderModelForm() const;
 
     //for downloading
     void initializeDownloadingQueue();
@@ -76,15 +87,15 @@ public:
 
     bool removeBucketFromDownloadingQueue(EEBucket *bucket);
 
-    void setOneBucketDownloadingQueueFiles(QList<EEFile> files);
-    bool removeFileFromOneBucketDownloadingQueue(EEFile file);
-    int currentFilesListSize();
-    EEFile currentFile() const;
+    void setTemporaryDownloadingQueueFiles(QList<EEFile *> files);
+    bool removeFileFromTemporaryDownloadingQueue(EEFile *file);
+    int temporaryBucketFilesListSize();
+    EEFile *temporaryBucketCurrentFile() const;
 
     void addCurrentFilesToDownloadQueue();
     bool setCurrentFileByDownloadingQueue();
-    EEFile currentDownloadingFile();
-    QQueue<EEFile> downloadingFileQueue() const;
+    EEFile *currentDownloadingFile();
+    QQueue<EEFile *> downloadingFileQueue() const;
 
 
     void setWorkingDirectory(QString directory);
@@ -105,19 +116,54 @@ public:
 
     QQueue<EEFolderModel *> updateBucketQueue() const;
     void addElementToUpdateBucketQueue(EEFolderModel *folder);
-    void addFileToUpdateFileQueue(EEFile file);
+    void addFileToUpdateFileQueue(EEFile *file);
 
-    QQueue<EEFile> updatingFilesQueue();
+    QQueue<EEFile *> updatingFilesQueue();
 
     bool setCurrentFileByUpdatingQueue();
-    EEFile currentUpdatingFile();
+    EEFile *currentUpdatingFile();
 
+
+    //for deletion
+    void addToDeletionBucketQueue(EEBucket *bucket);
+    EEBucket *nextBucketToRemove();
+    void addToDeletionFilesList(EEFile *file);
+    bool setCurrentFileByDeletionQueue();
+    EEFile *currentDeletionFile();
 
 
     void initializeUploadingBucketsQueueFromUpdateQueue();
     bool setCurrentFolderModelByUpdatingBucket();
-    bool setCurrentBucketsQueueByUpdatingBucket();
-    bool setUpdateFilesQueueToUploadQueue();
+    void setCurrentBucketsQueueByUpdatingBucket();
+    void setUpdateFilesQueueToUploadQueue();
+
+    //outdate deletion
+    void addOutdatedCloudFile(EEFile *file);
+    void addOutdatedLocalFile(QString fileName);
+    void addOutdateFolderToRemoveList(EEFolderModel *folderModel);
+
+    QList<EEFolderModel *> outdatedLocalFolders() const;
+
+    QList<EEFile *> outDatedCloudFiles() const;
+    EEFile *firstOutDateElement() const;
+    void removeFirstOutdated();
+
+    QList<EEFolderModel *> outDatedLocalFolderWithFilesToRemove() const;
+    void clearOutDatedFiles();
+
+    void clearOutDatedFolderList();
+
+
+
+    void addCorruptedCloudFile(EEFile *file);
+    void addCorruptedLocalFile(QString fileName);
+
+    QList<EEFile *> corruptedCloudFiles() const;
+    EEFile *firstCorruptedElement() const;
+    void removeFirstCorrupted();
+
+    QList<EEFolderModel *> corruptedFoldersWithFilesToRemove() const;
+    void clearCorruptedLocalValues();
 
 private:
     EEBucketDataHolder *mBucketDataHolder;
@@ -125,6 +171,9 @@ private:
     EEBucketDownloadingHandler *mDownloadingHandler;
     EEBucketUploadingHandler *mUploadingHandler;
     EEBucketUpdatingHandler *mUpdatingHandler;
+    EEBucketDeletionHandler *mBucketDeletionHandler;
+    EEOutdatedDataHolder *mOutdatedDataHolder;
+    EEBaseOutdatedDataHolder *mCorruptedDataHolder;
 };
 
 #endif // EEREMOTEBUCKETCONTROLLER_H

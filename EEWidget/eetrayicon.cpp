@@ -1,7 +1,6 @@
 #include "eetrayicon.h"
 
 #include <QPixmap>
-
 #include <QMenu>
 #include <QAction>
 #include <QDebug>
@@ -14,13 +13,14 @@ EETrayIcon::EETrayIcon(QObject *parent)
       mMenu{new QMenu},
       mTrayIcon{new QSystemTrayIcon}
 {
-    mActionActivate = new QAction(tr(TEXT_SIGNIN));
+    mActionActivate = new QAction(tr(TEXT_SIGNIN), this);
     connect(mActionActivate, SIGNAL(triggered(bool)), this, SLOT(signClicked()));
 
-    QAction *actionAccountInformation = new QAction(tr("Choose folder..."));
+    QAction *actionAccountInformation = new QAction(tr("Choose folder..."), this);
     connect(actionAccountInformation, SIGNAL(triggered(bool)), this, SIGNAL(showChooseFolder()));
 
-    QAction *actionExit = new QAction(tr("Exit"));
+    QAction *actionExit = new QAction(tr("Exit"), this);
+
     connect(actionExit, SIGNAL(triggered(bool)), this, SIGNAL(closeProgram()));
 
     mListOfActions.push_back(mActionActivate);
@@ -35,7 +35,7 @@ EETrayIcon::EETrayIcon(QObject *parent)
 
     //creating icon for tray
     QPixmap lPixmap(32,32);
-    lPixmap.load (":/resources/logo.png");
+    lPixmap.load (":/resources/xcloud.png");
 
     mTrayIcon->setIcon(QIcon(lPixmap));
     mTrayIcon->setContextMenu(mMenu);
@@ -47,9 +47,7 @@ EETrayIcon::EETrayIcon(QObject *parent)
 
 EETrayIcon::~EETrayIcon()
 {
-    qDebug() << typeid(*this).name() << " : " << __FUNCTION__;
-
-    qDeleteAll(mListOfActions);
+    //qDeleteAll(mListOfActions);
     delete mMenu;
     delete mTrayIcon;
 }

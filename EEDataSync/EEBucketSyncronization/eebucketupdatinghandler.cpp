@@ -1,52 +1,34 @@
 #include "eebucketupdatinghandler.h"
+#include "EEDataSync/EELocalDataParser/eefoldermodel.h"
+#include "eebucketdataholder.h"
+#include "EESDK/EEContainers/eebucket.h"
+
 #include <QDebug>
 
 EEBucketUpdatingHandler::EEBucketUpdatingHandler(EEBucketDataHolder *bucketData):
-    EEBucketUploadingHandler{bucketData}
+    EEBucketBaseHandler{bucketData},
+    EEFolderModelHolder{}
 {
 }
 
-void EEBucketUpdatingHandler::addElementToUpdateBucketQueue(EEFolderModel *folder)
+EEBucketUpdatingHandler::~EEBucketUpdatingHandler()
 {
-    addElementToUploadingBucketQueue(folder);
+
 }
 
-QQueue<EEFile> EEBucketUpdatingHandler::updatingFilesQueue() const
+
+QString EEBucketUpdatingHandler::currentFileNameFromFolderModel() const
 {
-    return uploadingFilesQueue();
+    return currentFolderModel()->filesList().at(bucketData()->currentFileIndex())->name();
 }
 
-void EEBucketUpdatingHandler::addFileToUpdateFileQueue(EEFile newFile)
-{
-    addFileToUploaingFileQueue(newFile);
-}
-
-bool EEBucketUpdatingHandler::setCurrentFileByUpdatingQueue()
-{
-    return setCurrentFileByUploadingQueue();
-}
-
-EEFile EEBucketUpdatingHandler::currentUpdatingFile()
-{
-    return currentUploadingFile();
-}
-
-bool EEBucketUpdatingHandler::setCurrentFolderModelByUpdatingBucket()
-{
-    return setCurrentFolderModelByUploadingBucket();
-}
-
-QQueue<EEFolderModel *> EEBucketUpdatingHandler::updatingBucketQueue() const
-{
-    return uploadingBucketsQueue();
-}
 
 EEBucket* EEBucketUpdatingHandler::rootBucket() const
 {
     EEBucket *lRoot = nullptr;
-    auto lBuckets = mBucketData->allBuckets();
+    auto lBuckets = bucketData()->allBuckets();
     for (auto bucket : lBuckets) {
-        if (bucket->name() == '/') {
+        if (bucket->name() == QString('/')) {
             lRoot = bucket;
             break;
         }
@@ -56,7 +38,7 @@ EEBucket* EEBucketUpdatingHandler::rootBucket() const
 
 EEBucket* EEBucketUpdatingHandler::lastBucket() const
 {
-    auto lBuckets = mBucketData->allBuckets();
+    auto lBuckets = bucketData()->allBuckets();
     EEBucket * lLastBucket = nullptr;
 
     if (!lBuckets.isEmpty()) {

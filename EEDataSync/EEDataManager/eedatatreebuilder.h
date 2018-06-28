@@ -2,7 +2,6 @@
 #define EEDATATREEBUILDER_H
 
 #include <QObject>
-#include "EEContainers/eefile.h"
 
 class EEBucketFacade;
 class EESDK;
@@ -34,12 +33,6 @@ public slots:
      * Activates after timer timeout.
      */
     void startBucketsStatusCheck();
-    /**
-     * @brief EEDataManager::saveBuckets
-     * Save list of buckets from cloud and call method for data status check
-     * @param buckets
-     */
-    void setFilesInformationForBucket(QList<EEFile> files);
 private:
     EESDK *mSdk;
     EEBucketFacade *mBucketFacade;

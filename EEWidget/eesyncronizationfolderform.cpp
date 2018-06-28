@@ -1,6 +1,7 @@
 #include "eesyncronizationfolderform.h"
 #include "ui_eesyncronizationfolderform.h"
 #include "eesettingsclass.h"
+#include "globalconstants.h"
 
 #include <QFileDialog>
 #include <QDebug>
@@ -28,17 +29,12 @@ EESyncronizationFolderForm::EESyncronizationFolderForm(EESDK *sdk, QWidget *pare
 
 EESyncronizationFolderForm::~EESyncronizationFolderForm()
 {
-    qDebug() << typeid(*this).name() << " : " << __FUNCTION__;
-
     delete ui;
 }
 
 void EESyncronizationFolderForm::resetDefaultPath()
 {
-    QString lXCloudPath = "/X Cloud";
-#ifdef WIN32
-    XCloudPath = "\\X Cloud";
-#endif
+    QString lXCloudPath = "/" + GlobalData::gAppName;
     QString lPath =  QStandardPaths::writableLocation(QStandardPaths::HomeLocation) + lXCloudPath;
     EESettingsClass::getInstance().setSettingsValue(SettingsOptions::FolderName, lPath);
 }

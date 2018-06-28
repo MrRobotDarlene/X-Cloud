@@ -1,2 +1,2 @@
-install nettle json-c uv curl uuid
+install libcrypto
 install qt 5.8+

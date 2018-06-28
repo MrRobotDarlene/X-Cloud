@@ -1,10 +1,11 @@
 #include "eedatacomparator.h"
-#include "EEContainers/eebucket.h"
-#include "EEContainers/eefile.h"
+#include "EESDK/EEContainers/eebucket.h"
+#include "EESDK/EEContainers/eefile.h"
 #include "EEDataSync/EEBucketSyncronization/eebucketfacade.h"
-#include "EEDataSync/EEParser/eefolderparsecontroller.h"
+#include "EEDataSync/EELocalDataParser/eefolderparsecontroller.h"
 
 #include <QDebug>
+#include <typeinfo>
 
 
 EEDataComparator::EEDataComparator(EESDK *sdk, EEBucketFacade *facade, EEFolderParseController *folderParseController, QObject *parent)
@@ -15,6 +16,153 @@ EEDataComparator::EEDataComparator(EESDK *sdk, EEBucketFacade *facade, EEFolderP
 {
 
 }
+
+/**
+ * @brief EEDataComparator::initializeComparationLocalDataWithJson
+ * Initialize process of comparation local data with json data
+ * @param jsonFolderModel
+ */
+void EEDataComparator::initializeOutdatedDataComparation(EEFolderModel *jsonFolderModel, EEFolderModel *cloudFolderModel)
+{
+    qDebug() << typeid(*this).name() << __FUNCTION__;
+    EEFolderModel *lRoot = mFolderParseController->rootModel();
+    EEFolderModel *lJsonRoot = jsonFolderModel;
+    EEFolderModel *lCloudRoot = cloudFolderModel;
+
+    if (lRoot != nullptr) {
+        if (lJsonRoot != nullptr) {
+            if (lCloudRoot != nullptr) {
+                if (lRoot->name() == lJsonRoot->name()) {
+                    if (lCloudRoot->name() == lJsonRoot->name()) {
+                        //check root folder's files
+                        compareLocalFilesWithJson(lRoot, lJsonRoot, lCloudRoot);
+
+                        //move through its subfolders
+                        compareLocalFoldersWithJson(lRoot, lJsonRoot, lCloudRoot);
+                    } else {
+                        qDebug() << "Cloud doesn't contain root!";
+                    }
+                } else {
+                    qDebug() << "Json or local files doesn't contain root folder";
+                }
+            } else {
+                qDebug() << "Cloud root folder is not initialized";
+            }
+        } else {
+            qDebug() << "Json root folder is not initalized";
+        }
+    } else {
+        qDebug() << "Local root folder is not initialized!";
+    }
+
+}
+/**
+ * @brief EEDataComparator::compareLocalFoldersWithJson
+ * Compare local folders with json.
+ * If exists in both - start to compare files too
+ * IF exists in json and not locally - add to deletion list
+ * @param localFolder - root local folder
+ * @param jsonFolder - root json folder
+ */
+void EEDataComparator::compareLocalFoldersWithJson(EEFolderModel *localFolder, EEFolderModel *jsonFolder, EEFolderModel *cloudFolder)
+{
+    foreach (EEFolderModel *subJsonFolder, jsonFolder->folderList()) {
+        bool lIsLocalExists = false;
+        EEFolderModel *lTemporaryFolder = nullptr;
+        foreach (EEFolderModel *subLocalFolder, localFolder->folderList()) {
+            if (subLocalFolder->name() == subJsonFolder->name()) {
+                lTemporaryFolder = subLocalFolder;
+                lIsLocalExists = true;
+                break;
+            }
+        }
+
+        if (!lIsLocalExists) {
+            qDebug() << "Folder has been removed local and should be removed from cloud: "
+                     << subJsonFolder->name();
+            //add also all of the subfolders
+            addFolderWithSubfoldersToDeletionList(subJsonFolder);
+        } else {
+            EEFolderModel *lCloudTemporaryFolder = nullptr;
+            if (cloudFolder != nullptr) {
+                bool lIsCloudExists = false;
+                foreach (EEFolderModel *subCloudFolder, cloudFolder->folderList()) {
+                    if (subCloudFolder->name() == lTemporaryFolder->name()) {
+                        lCloudTemporaryFolder = subCloudFolder;
+                        lIsCloudExists = true;
+                        break;
+                    }
+                }
+
+
+                if (!lIsCloudExists) {
+                    qDebug() <<"Add local folder to deletion list" << lTemporaryFolder->name();
+                    //add to local deletion
+                    mBucketFacade->addOutdateFolderToRemoveList(lTemporaryFolder);
+                }
+            }
+
+            //first check files for this directory
+            compareLocalFilesWithJson( lTemporaryFolder, subJsonFolder, lCloudTemporaryFolder);
+
+            //keep move through its subfolders
+            compareLocalFoldersWithJson(lTemporaryFolder, subJsonFolder, lCloudTemporaryFolder);
+        }
+    }
+}
+/**
+ * @brief EEDataComparator::compareLocalFilesWithJson
+ * If file is not exists locally anymore - add to deletion files list
+ * @param localFolder - local folder, which files have to be compared
+ * @param jsonFolder - same folder as it described in json
+ */
+void EEDataComparator::compareLocalFilesWithJson(EEFolderModel *localFolder, EEFolderModel *jsonFolder, EEFolderModel *cloudFolder)
+{
+    foreach (EEModel *jsonFile, jsonFolder->filesList() ) {
+        bool lIsLocalExists = false;
+        foreach (EEModel *localFile, localFolder->filesList()) {
+            if (localFile->name() == jsonFile->name()) {
+                lIsLocalExists = true;
+                break;
+            }
+        }
+
+        if (!lIsLocalExists) {
+            qDebug() << "Try to add file to deletion list " << jsonFile->name();
+            EEBucket *lBucket =  mBucketFacade->bucketByName(jsonFolder->name());
+            if (lBucket != nullptr) {
+                EEFile *lFile = mBucketFacade->bucketFileByName(jsonFile->name().split("/").takeLast(), lBucket->id());
+                if (lFile != nullptr) {
+                    qDebug() << "Added succesfully";
+                    mBucketFacade->addToDeletionFilesList(lFile);
+                } else {
+                    qDebug() << "No such file: " << jsonFile->name();
+                }
+            } else {
+                qDebug() << "No such bucket: " << jsonFolder->name();
+            }
+        } else {
+            //search for local files to delete
+            if (cloudFolder != nullptr) {
+                bool lIsCloudExists = false;
+                foreach (EEModel *cloudFile, cloudFolder->filesList()) {
+                    if (cloudFile->name() == jsonFile->name()) {
+                        lIsCloudExists = true;
+                        break;
+                    }
+                }
+
+                if (!lIsCloudExists) {
+                    qDebug() << "Add file to local deletion list" << jsonFile->name();
+                    //add file to local deletion files
+                    mBucketFacade->addOutdatedLocalFile(jsonFile->name());
+                }
+            }
+        }
+    }
+}
+
+
 /**
  * @brief EEDataComparator::startCompareData
  * Start process of data comparation.
@@ -28,17 +176,11 @@ void EEDataComparator::startCompareData()
     qDebug() << typeid(*this).name() << " : " << __FUNCTION__;
 
     QList<EEBucket*>lRemoteBucketsList = mBucketFacade->allBuckets();
-//    if (mFolderParseController == nullptr) {
-//        mFolderParseController = new EEFolderParseController;
-//    }
-
-
-//    mFolderParseController->startSubfoldersInitialization(mBucketFacade->workingDirectory());
-
     EEFolderModel *lRoot = mFolderParseController->rootModel();
     //first, initialize donwloading queue with all buckets
     //if it doesn't need to be downloaded - remove it from list
     mBucketFacade->setDownloadingBucketQueue(lRemoteBucketsList);
+
 
     //first of all, compare root bucket files
     mBucketFacade->removeBucketFromDownloadingQueue(mBucketFacade->rootBucket());
@@ -53,7 +195,25 @@ void EEDataComparator::startCompareData()
     qDebug() << "Data has been compared!!!";
     emit dataCompared();
 }
+/**
+ * @brief EEDataComparator::addFolderWithSubfoldersToDeletionList
+ * Recursively add bucket and its subbuckets to deletion list
+ * @param model
+ */
+void EEDataComparator::addFolderWithSubfoldersToDeletionList(EEFolderModel *model)
+{
+    EEBucket *lBucket = mBucketFacade->bucketByName(model->name());
 
+    if (lBucket != nullptr) {
+        mBucketFacade->addToDeletionBucketQueue(lBucket);
+    } else {
+        qDebug() << "Bucket has already been removed from cloud! " << model->name();
+    }
+
+    for (auto folder: model->folderList()) {
+        addFolderWithSubfoldersToDeletionList(folder);
+    }
+}
 
 /**
  * @brief EEDataComparator::buildUpdateFolders
@@ -64,25 +224,21 @@ void EEDataComparator::startCompareData()
  */
 void EEDataComparator::buildUpdateFolders(EEFolderModel * const parentFolder)
 {
-    qDebug() << typeid(*this).name() << " : " << __FUNCTION__;
-
     foreach (EEFolderModel *folder, parentFolder->folderList()) {
         EEBucket* lCheckBucket = mBucketFacade->bucketByName(folder->name());
         if (lCheckBucket != nullptr) {
-            qDebug() << lCheckBucket->name();
             if (mBucketFacade->removeBucketFromDownloadingQueue(lCheckBucket)) {
                 qDebug() << "Removed bucket from downloading queue! " << lCheckBucket->name();
+            } else {
+                qDebug() << " Bucket cannot be removed! Maybe it has already been removed!" << lCheckBucket->name();
             }
-#warning should be changed to pointer!
             buildUpdateFilesForFolder(folder->filesList(),
                                       mBucketFacade->filesByBucketId(lCheckBucket->id()),
                                       lCheckBucket->name());
             qDebug() << "Bucket is already on the cloud! Move forward " << lCheckBucket->name();
         } else {
-            //add bucket, which is not on the cloud yet
             qDebug() << "Bucket is not on the cloud yet. Add it! " << folder->name();
             mBucketFacade->addElementToUpdateBucketQueue(folder);
-            //create bucket!;
         }
         buildUpdateFolders(folder);
     }
@@ -101,25 +257,20 @@ void EEDataComparator::buildUpdateFolders(EEFolderModel * const parentFolder)
  * @param cloudFiles - list of cloud files
  * @param bucketName
  */
-void EEDataComparator::buildUpdateFilesForFolder(QList<EEModel*> localFiles, QList<EEFile> cloudFiles, QString bucketName)
+void EEDataComparator::buildUpdateFilesForFolder(QList<EEModel*> localFiles, QList<EEFile*> cloudFiles, QString bucketName)
 {
-    qDebug() << typeid(*this).name() << " : " << __FUNCTION__;
+    mBucketFacade->setTemporaryDownloadingQueueFiles(cloudFiles);
 
-    mBucketFacade->setOneBucketDownloadingQueueFiles(cloudFiles);
     QString lSeparator = "/";
-#ifdef WIN32
-    lSeparator = "\\";
-#endif
     foreach (EEModel *localFile, localFiles) {
         //add to upload queue, if local file is not in the list of cloud files
         if (!listHasName(cloudFiles, localFile->name().split(lSeparator).takeLast())) {
-            qDebug() << localFile->name().replace(bucketName, "");
             mBucketFacade->addModelToUploadFilesQueue(localFile->name().split(lSeparator).takeLast(),
-                                                      mBucketFacade->bucketByName(bucketName)->id());
+                                                          mBucketFacade->bucketByName(bucketName)->id());
         } else {
-            foreach (EEFile cloudFile, cloudFiles) {
+            foreach (EEFile* cloudFile, cloudFiles) {
                 //special case for root
-                if (bucketName == "/") {
+                if (bucketName == QString("/")) {
                     bucketName = "";
                 } else {
                     if (!bucketName.isEmpty())  {
@@ -128,28 +279,27 @@ void EEDataComparator::buildUpdateFilesForFolder(QList<EEModel*> localFiles, QLi
                         }
                     }
                 }
-                if (localFile->name() == (bucketName + lSeparator + cloudFile.filename())) {
+                if (localFile->name() == (bucketName + lSeparator + cloudFile->filename())) {
                     //if local file is newer or same datetime as file on cloud
                     //remove it from downloading files list
-                    if (localFile->updated().secsTo(cloudFile.created()) <= 0) {
-                        qDebug() << "Time difference:" << localFile->updated().secsTo(cloudFile.created());
-                        if (mBucketFacade->removeFileFromOneBucketDownloadingQueue(cloudFile)) {
-                            qDebug() << "File removed from downloading list:" << cloudFile.filename();
+                    if (localFile->updated().secsTo(cloudFile->created()) <= 0) {
+                        qDebug() << "Time difference:" << localFile->updated().secsTo(cloudFile->created());
+                        if (mBucketFacade->removeFileFromTemporaryDownloadingQueue(cloudFile)) {
+                            qDebug() << "File removed from downloading list:" << cloudFile->filename();
                         } else {
-                            qDebug() << "File cannot be removed from donwloading list:" << cloudFile.filename();
+                            qDebug() << "File cannot be removed from downloading list:" << cloudFile->filename();
                         }
                         //if local file is later - add to update list
-                        if (localFile->updated().secsTo(cloudFile.created()) < 0) {
+                        if (localFile->updated().secsTo(cloudFile->created()) < 0) {
                             mBucketFacade->addFileToUpdateFileQueue(cloudFile);
-                            break;
+                            //break;
                         }
                     } else {
-                        qDebug() << "Local file is older! Keep it in downloading files queue..." << cloudFile.filename();
-                        qDebug() << "Time difference:" << localFile->updated().secsTo(cloudFile.created());
+                        qDebug() << "Local file is older! Keep it in downloading files queue..." << cloudFile->filename();
                     }
-                } else if (!listHasName(localFiles, bucketName + lSeparator + cloudFile.filename())) {
-                    qDebug() << "Keep file in the downloading queue : " << cloudFile.filename();
-                    break;
+                } else if (!listHasName(localFiles, bucketName + lSeparator + cloudFile->filename())) {
+                    qDebug() << "Keep file in the downloading queue : " << cloudFile->filename();
+                    //break;
                 }
             }
         }
@@ -182,10 +332,10 @@ bool EEDataComparator::listHasName(QList<EEModel *> list, QString name)
  * @param name- local file name
  * @return
  */
-bool EEDataComparator::listHasName(QList<EEFile> list, QString name)
+bool EEDataComparator::listHasName(QList<EEFile*> list, QString name)
 {
-    foreach (EEFile file, list) {
-        if (file.filename() == name) {
+    foreach (EEFile *file, list) {
+        if (file->filename() == name) {
             return true;
         }
     }

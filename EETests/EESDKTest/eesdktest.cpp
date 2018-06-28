@@ -39,12 +39,12 @@ void EESDKTest::startTests()
 //    testDataDownloading();
 //    testDataUploading();
 //    testCreateBucket();
-    testGetBuckets();
+//    testGetBuckets();
 //    testDestroyBuckets();
 //    testDeleteFile();
 //    testGetListOfFilesForBucket();
 //    testUploadFile();
-//    testDownloadFile();
+    testDownloadFile();
 }
 
 void EESDKTest::testDataDownloading()
@@ -138,11 +138,11 @@ void EESDKTest::showTestStatus(QString method, QString status, QString message)
 
     } else if (method == MTD_DOWNLOD_SHARD) {
         qDebug() << "Starting downloading...";
-        QString lBucketId = "cf45664ec92607548dea94af";
-        QString lFileId = "6a285fbdaac9c30774714891";
+        QString lBucketId = "fa14ae86e28bec858fb1b175";
+        QString lFileId = "55d8de6f5b6aa9d6d876df6c";
         //6a285fbdaac9c30774714891
         //2f01c8355f7e20ccfa0c9c68
-        QString filePath = "/Users/vshevchyk/Documents/test";
+        QString filePath = "C:/Users/Admin/xcloud";
 
         mLoader->downloadFile(lBucketId, lFileId, filePath);
 //        foreach (EEBucket bucket, mBuckets) {

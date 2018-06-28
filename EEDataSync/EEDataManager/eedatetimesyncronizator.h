@@ -2,10 +2,14 @@
 #define EEDATESYNCRONIZATOR_H
 
 #include <QObject>
+#include <QList>
+
+
 class EEFolderModel;
 class EEFolderParseController;
 class EESDK;
 class EEBucketFacade;
+class EEJsonBuilder;
 
 /**
  * @brief The EEDateTimeSyncronizator class
@@ -16,30 +20,8 @@ class EEDateTimeSyncronizator : public QObject
 {
     Q_OBJECT
 public:
-    explicit EEDateTimeSyncronizator(EESDK *sdk, EEBucketFacade *facade, EEFolderParseController *folderParseController, QObject *parent = nullptr);
-
-    /**
-     * @brief EEDateTimeSyncronizator::initializeDateSyncronization
-     * Start process of file's/folder's date syncronization.
-     * This method calls after all required data were donwloaded/uploaded
-     */
-    void initializeDateSyncronization();
-    /**
-     * @brief EEDateTimeSyncronizator::syncronizeLocalDataWithCloud
-     * Reinitialized data about local folders/files, start to compare
-     * with cloud data
-     */
-    void syncronizeLocalDataWithCloud();
-
+    explicit EEDateTimeSyncronizator(EESDK *sdk, EEJsonBuilder *builder, EEBucketFacade *facade, EEFolderParseController *folderParseController, QObject *parent = nullptr);
 private:
-
-    /**
-    * @brief EEDateTimeSyncronizator::moveThrowFolder
-    * Moves recursively throw folder, syncronizate local files last modification date with cloud date
-    * @param model
-    */
-    void moveThrowFolder(EEFolderModel *model);
-
     /**
      * @brief EEDateTimeSyncronizator::setFileModificationTime
      * Manually set file modification time
@@ -47,11 +29,26 @@ private:
      * @param updateTime
      */
     bool setFileModificationTime(QString fileName, QDateTime updateTime);
+
 signals:
+    void fileDateTimeSyncronizated();
 
 public slots:
+    /**
+     * @brief EEDateTimeSyncronizator::initializeFileDateSyncronization
+     * This process starts after files uploading
+     */
+    void initializeFileDateSyncronization();
+
+    /**
+     * @brief EEDateTimeSyncronizator::synchronizateFileDateFile
+     * Syncronizate datetime for current bucket and file.
+     * Activates after downloading and uploading
+     */
+    void synchronizateFileDateTime();
 private:
     EESDK *mSdk;
+    EEJsonBuilder *mJsonBuilder;
     EEFolderParseController *mFolderParseController;
     EEBucketFacade *mBucketFacade;
 };

@@ -2,13 +2,14 @@
 #define EEDATALOADER_H
 
 #include <QObject>
-#include "EEContainers/eefile.h"
 
 class EESDK;
 class EEBucketFacade;
 class EEFileLoader;
 class EEBucket;
 class EEFolderParseController;
+class EEFile;
+class EEJsonBuilder;
 
 /**
  * @brief The EEDataLoader class
@@ -19,7 +20,26 @@ class EEDataLoader : public QObject
 {
     Q_OBJECT
 public:
-    explicit EEDataLoader(EESDK *sdk, EEBucketFacade *facade, EEFolderParseController *folderParseController, EEFileLoader *loader, QObject *parent = nullptr);
+    explicit EEDataLoader(EESDK *sdk,
+                          EEJsonBuilder *builder,
+                          EEBucketFacade *facade,
+                          EEFolderParseController *folderParseController,
+                          EEFileLoader *loader,
+                          QObject *parent = nullptr);
+
+    /**
+     * @brief EEDataLoader::deleteNextBucket
+     * Delete bucket according to deletion queue.
+     * After buckets deletion start to delete files
+     */
+    void deleteNextBucket();
+
+    /**
+     * @brief EEDataLoader::deleteNextFile
+     * Delete file from bucket according to files deletion queue
+     * After deletion emit signal about whole data complited deletion
+     */
+    void deleteNextFile();
 
     /**
      * @brief EEDataLoader::startDataUpdate
@@ -55,7 +75,7 @@ public:
      * Call another method to start process of files downloading
      * @param files - list of files of backet
      */
-    void filesListReceived(QList<EEFile> files);
+    void downloadingFilesListReceived();
 
     /**
      * @brief EEDataLoader::startDataDownloading
@@ -114,10 +134,13 @@ private:
     void downloadFile();
 
 signals:
-    void startFilesUpload();
+    void startFilesUploading();
     void uploadingFinished();
-    void newBucketsDownloaded();
-    void startDateSyncronization();
+    void startFilesDownloading();
+
+    void folderFilesDateSyncronization();
+
+    void dataDeleted();
 public slots:
     /**
      * @brief EEDataLoader::bucketCreated
@@ -127,10 +150,10 @@ public slots:
      */
     void bucketCreated(EEBucket *newbucket);
     /**
-     * @brief EEDataManager::startUpdateNextBucket
+     * @brief EEDataLoader::updateNextBucket
      * Delete neccesary buckets and then upload them from local machine
      */
-    void startUpdateNextBucket();
+    void updateNextBucket();
 
     /**
      * @brief EEDataManager::cloudFilesUpdating
@@ -141,6 +164,7 @@ public slots:
 
 private:
     EESDK *mSdk;
+    EEJsonBuilder *mJsonBuilder;
     EEBucketFacade *mBucketFacade;
     EEFolderParseController *mFolderParseController;
     EEFileLoader *mLoader;

@@ -16,10 +16,6 @@ class EELog : public QObject
 public:
     static EELog* getInstance();
 
-private:
-    static void DefaultMessageHandler(QtMsgType type, const QMessageLogContext &context, const QString &msg);
-
-public:
     void initialise();
 
     QString getLogFileName() const;
@@ -30,10 +26,15 @@ public:
 
     QString getLogFileAbsolutePath() const;
 
+    static const QString mlogFileName;
+
 private :
     EELog(QObject *parent = 0);
 
     void writeLog(const QString& text);
+
+    static void DefaultMessageHandler(QtMsgType type, const QMessageLogContext &context, const QString &msg);
+
 
 private:
     QFile* mOutLogFile;
@@ -44,10 +45,7 @@ private:
 
     int mLogLinesCounter;
 
-    static constexpr int mDefaultLogMaxLine = 1000;
-signals:
-
-public slots:
+    static constexpr int mDefaultLogMaxLine = 500;
 };
 
 #endif // EELOG_H

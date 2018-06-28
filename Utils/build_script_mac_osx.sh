@@ -8,7 +8,7 @@ echo "Version built: $version_str"
 
 cd "$PROJECT_ROOT"
 if [ $? -ne 0 ]; then
-    echo "Failed to cd purk"
+    echo "Failed to cd X Cloud"
     exit $?
 fi
 
@@ -38,9 +38,9 @@ if [ $? -ne 0 ]; then
     exit $?
 fi
 
-cp ../../resources/logo.icns X\ Cloud.app/Contents/Resources
+cp ../../resources/xcloud.icns X\ Cloud.app/Contents/Resources
 if [ $? -ne 0 ]; then
-    echo "Failed to cp logo.icns to resources"
+    echo "Failed to cp xcloud.icns to resources"
     exit $?
 fi
 
@@ -64,7 +64,7 @@ if [ $? -ne 0 ]; then
 fi
 
 
-hdiutil create -format UDZO -srcfolder package_folder -volname XCloud "XCloud-macos-x64-$version_str.dmg"
+hdiutil create -format UDZO -srcfolder package_folder -volname X\ Cloud "XCloud-macos-x64-$version_str.dmg"
 if [ $? -ne 0 ]; then
     echo "Failed to create dmg"
     exit 1
@@ -72,12 +72,6 @@ fi
 
 mv XCloud-macos-x64-$version_str.dmg ../
 mv -r X\ Cloud.app ../
-
-#zip -r -y "purk-macos-x64-v0.2.0.zip" qt-purk.app
-#if [ $? -ne 0 ]; then
-#    echo "Failed to zip app"
-#    exit $?
-# fi
 
 cd ..
 echo "Build success"

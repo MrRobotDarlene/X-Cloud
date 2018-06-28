@@ -3,17 +3,21 @@
 
 #include <QObject>
 
+#include "EESDK/EEContainers/eeerror.h"
+
 class QCloseEvent;
 class EESDK;
 class EEDataManager;
 class EEFileLoader;
-class EECryptoWrapper;
-
+class EESignInController;
 
 class EETrayIcon;
+class EEStartWindow;
+class EECivicLoginIn;
 class EELogin;
 class EESyncronizationFolderForm;
 class EEQuitDialog;
+
 
 class EEMainController : public QObject
 {
@@ -37,6 +41,14 @@ private:
      */
     bool syncronizationStatus();
 public slots:
+
+    /**
+     * @brief EEMainController::startSignInWithCivic
+     * Try to auto sign in
+     * If no, show start window, which provide possibility to choose register or log in
+     */
+    void startSignInWithCivic();
+
     /**
      * @brief EEMainController::chooseFolderClicked
      * After "choose button" clicked
@@ -50,7 +62,22 @@ public slots:
      * If syncronization is active - show warning message box
      */
     void closeProgramClicked();
+
 private slots:
+    /**
+     * @brief EEMainController::errorMessageBox
+     * Custom warninng message box with text
+     * @param error
+     * @param result
+     */
+    void errorMessageBox(EEError error, QString result);
+
+    /**
+     * @brief EEMainController::anotherFolderChoosed
+     * If another folder has been choosed - remove previous json
+     * @param path
+     */
+    void anotherFolderChoosed(QString path);
     /**
      * @brief EEMainController::signOut
      * if user click sing out - stop timer for status check and set button as sign in
@@ -81,16 +108,17 @@ private slots:
     void userLoggedIn();
 private:
     EESDK *mSdk;
+    EESignInController *mSignInController;
+    EEFileLoader *mLoader;
+    EEDataManager *mDataManager;
+
     EETrayIcon *mTrayIcon;
 
+    EEStartWindow *mStartWindow;
+    EECivicLoginIn *mCivicLogin;
     EELogin *mLogin;
     EESyncronizationFolderForm *mSyncronizationForm;
     EEQuitDialog *mQuitDialog;
-
-
-    EECryptoWrapper *mWrapper;
-    EEFileLoader *mLoader;
-    EEDataManager *mDataManager;
 };
 
 #endif // EEMAINCONTROLLER_H

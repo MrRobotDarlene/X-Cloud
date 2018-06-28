@@ -54,8 +54,6 @@ private:
 private:
     QSettings *mSettings;
     QString mPathToSettings;
-
-    //constexpr auto mConstSettinsFilePath = "//temp//settings_profile.ini";
 };
 
 #endif // EESETTINGSCLASS_H

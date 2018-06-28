@@ -1,25 +1,73 @@
 #include "eedataloader.h"
 #include "EEDataSync/EEBucketSyncronization/eebucketfacade.h"
-#include "EEDataSync/EEParser/eefolderparsecontroller.h"
+#include "EEDataSync/EELocalDataParser/eejsonbuilder.h"
+#include "EEDataSync/EELocalDataParser/eefolderparsecontroller.h"
+#include "eefoldermodel.h"
 
-#include "EEContainers/eebucket.h"
+
+#include "EESDK/EEContainers/eebucket.h"
+#include "EESDK/EEContainers/eefile.h"
 #include "EESDK/eefileloader.h"
 #include "eestatustimer.h"
 #include "eesettingsclass.h"
 
-#include "eesdk.h"
+#include "EESDK/eesdk.h"
 
 #include <QDebug>
 #include <QDir>
+#include <QDateTime>
+#include <QPointer>
+#include <typeinfo>
 
-EEDataLoader::EEDataLoader(EESDK *sdk, EEBucketFacade *facade,  EEFolderParseController *folderParseController, EEFileLoader *loader, QObject *parent)
+EEDataLoader::EEDataLoader(EESDK *sdk,
+                           EEJsonBuilder *builder,
+                           EEBucketFacade *facade,
+                           EEFolderParseController *folderParseController,
+                           EEFileLoader *loader,
+                           QObject *parent)
     : QObject(parent),
       mSdk{sdk},
+      mJsonBuilder{builder},
       mBucketFacade{facade},
       mFolderParseController{folderParseController},
       mLoader{loader}
 {
 
+}
+/**
+ * @brief EEDataLoader::deleteNextBucket
+ * Delete bucket according to deletion queue.
+ * After buckets deletion start to delete files
+ */
+void EEDataLoader::deleteNextBucket()
+{
+    qDebug() << "- EEDataLoader::deleteNextBucket()";
+
+    EEBucket *lBucket = mBucketFacade->nextBucketToRemove();
+    if (lBucket != nullptr) {
+        mSdk->destroyBucket(lBucket->id());
+    } else {
+        qDebug() << "All required buckets have been deleted!";
+        qDebug() << "Start to delete files!";
+        deleteNextFile();
+    }
+
+}
+/**
+ * @brief EEDataLoader::deleteNextFile
+ * Delete file from bucket according to files deletion queue
+ * After deletion emit signal about whole data complited deletion
+ */
+void EEDataLoader::deleteNextFile()
+{
+    if (mBucketFacade->setCurrentFileByDeletionQueue()) {
+        EEFile *lFile = mBucketFacade->currentDeletionFile();
+        mLoader->deleteFile(lFile->bucketId(), lFile->id());
+    } else {
+        qDebug() << "All required data has been deleted!";
+        qDebug() << "Start to compare data actuality";
+        emit dataDeleted();
+    }
 }
 
 /**
@@ -34,6 +82,14 @@ void EEDataLoader::createBucket()
     //create bucket for folder
     QString lBucketName = mBucketFacade->currentUploadingFolderName();
 
+    //if folder's status cannot be updated, because it hasn't been added to json yet - add it
+    if (!mJsonBuilder->updateStatus(OperationType::Upload , lBucketName)) {
+        EEFolderParseController *lCurrentFolderParser = new EEFolderParseController(this);
+        lCurrentFolderParser->startSubfoldersInitialization(mBucketFacade->workingDirectory() + lBucketName);
+        mJsonBuilder->addCurrentObjectToJson(QDateTime(), lCurrentFolderParser->rootModel());
+        mJsonBuilder->updateCurrentElementStatus();
+    }
+
     mSdk->createBucket(lBucketName);
 }
 
@@ -46,12 +102,19 @@ void EEDataLoader::uploadFile()
 {
     qDebug() << typeid(*this).name() << " : " << __FUNCTION__;
 
-    QString lFileName = mFolderParseController->filePath(mBucketFacade->currentUploadingFileNameFromFolderModel());
+    QString lFilePath = mFolderParseController->filePath(mBucketFacade->currentUploadingFileNameFromFolderModel());
     QString lBucketId = mBucketFacade->currentBucket()->id();
-    qDebug() << "File name to upload : " << lFileName;
+    qDebug() << "File name to upload : " << lFilePath;
     qDebug() << "Bucket id: " << lBucketId;
+    QString lFileName = lFilePath.split('/').takeLast();
 
-    mLoader->uploadData(lBucketId, lFileName);
+    mBucketFacade->setCurrentFileName(lFileName);
+
+    //if file's status cannot be updated, because it hasn't been added to json yet - add it
+    if (!mJsonBuilder->updateStatus( OperationType::Upload, mBucketFacade->currentBucket()->name(), lFileName)) {
+        mJsonBuilder->addCurrentObjectToJson();
+    }
+    mLoader->uploadData(lBucketId, lFilePath);
 }
 
 /**
@@ -63,21 +126,25 @@ void EEDataLoader::downloadFile()
     qDebug() << typeid(*this).name() << " : " << __FUNCTION__;
 
     EEBucket* lCurrentBucket = mBucketFacade->currentBucket();
-    QString lFileId = mBucketFacade->currentFile().id();
+    QString lFileId = mBucketFacade->temporaryBucketCurrentFile()->id();
     QString lFolderPath = lCurrentBucket->name();
 
     QString lSeparator = "/";
-#ifdef WIN32
-    lSeparator = "\\";
-#endif
     if (!lFolderPath.isEmpty()) {
         if (lFolderPath.at(0) != lSeparator) {
             lFolderPath = lSeparator + lFolderPath;
         }
     }
 
-    QString lFileName = mBucketFacade->currentFile().filename();
+    QString lFileName = mBucketFacade->temporaryBucketCurrentFile()->filename();
+    mBucketFacade->setCurrentFileName(lFileName);
     QString lPath = mBucketFacade->workingDirectory() + lFolderPath + lSeparator + lFileName;
+
+
+    //if file's status cannot be updated, because it hasn't been added to json yet - add it
+    if (!mJsonBuilder->updateStatus(OperationType::Download, lFolderPath, lFileName)) {
+        mJsonBuilder->addCurrentObjectToJson();
+    }
 
     qDebug() << "Path to save : " << lPath;
     mLoader->downloadFile(lCurrentBucket->id(), lFileId, lPath);
@@ -90,11 +157,11 @@ void EEDataLoader::downloadFile()
  * Call another method to start process of files downloading
  * @param files - list of files of backet
  */
-void EEDataLoader::filesListReceived(QList<EEFile> files)
+void EEDataLoader::downloadingFilesListReceived()
 {
     qDebug() << typeid(*this).name() << " : " << __FUNCTION__;
 
-    mBucketFacade->setOneBucketDownloadingQueueFiles(files);
+    mBucketFacade->setTemporaryDownloadingQueueFiles(mBucketFacade->filesByBucketId(mBucketFacade->currentBucket()->id()));
     mBucketFacade->setCurrentFileIndex(-1);
     startDataDownloading();
 }
@@ -109,7 +176,7 @@ void EEDataLoader::startDataDownloading()
 {
     qDebug() << typeid(*this).name() << " : " << __FUNCTION__;
 
-    int lNumberOfFiles = mBucketFacade->currentFilesListSize();
+    int lNumberOfFiles = mBucketFacade->temporaryBucketFilesListSize();
     if (mBucketFacade->currentFileIndex() + 1 < lNumberOfFiles) {
         qDebug() << "Move to the next file";
         //move to the next file
@@ -143,19 +210,19 @@ void EEDataLoader::startDataUpdate()
 {
     qDebug() << typeid(*this).name() << " : " << __FUNCTION__;
 
-#warning maybe return should be removed!
     if (!mBucketFacade->updateBucketQueue().isEmpty()) {
         qDebug() << "Update bucket queue...";
         mBucketFacade->initializeUploadingBucketsQueueFromUpdateQueue();
-        startUpdateNextBucket();
+        updateNextBucket();
         return;
     } else if (!mBucketFacade->updatingFilesQueue().isEmpty()){
         qDebug() << "Update files queue...";
+        mBucketFacade->setUpdateFilesQueueToUploadQueue();
         cloudFilesUpdating();
         return;
     } else if(!mBucketFacade->uploadingFilesQueue().isEmpty()) {
        qDebug() << "Uploading files queue...";
-       emit startFilesUpload();
+       emit startFilesUploading();
        return;
     } else if (!mBucketFacade->downloadingBucketsQueue().isEmpty()) {
         qDebug() << "Download buckets...";
@@ -163,7 +230,7 @@ void EEDataLoader::startDataUpdate()
         return;
     } else if (!mBucketFacade->downloadingFileQueue().isEmpty()) {
         qDebug() << "Downloading files...";
-        emit newBucketsDownloaded();
+        emit startFilesDownloading();
         return;
     } else {
         qDebug() << "Everything up-to-date";
@@ -173,10 +240,10 @@ void EEDataLoader::startDataUpdate()
 
 
 /**
- * @brief EEDataLoader::startUpdateNextBucket
+ * @brief EEDataLoader::updateNextBucket
  * Delete neccesary buckets and then upload them from local machine
  */
-void EEDataLoader::startUpdateNextBucket()
+void EEDataLoader::updateNextBucket()
 {
     qDebug() << typeid(*this).name() << " : " << __FUNCTION__;
 
@@ -184,18 +251,28 @@ void EEDataLoader::startUpdateNextBucket()
     if (mBucketFacade->setCurrentFolderModelByUpdatingBucket()) {
         QString lFolderName = mBucketFacade->currentUpdatingFolderName();
         EEBucket* lCheckBucket = mBucketFacade->bucketByName(lFolderName);
+
         if (lCheckBucket != nullptr) {
+            //if folder's status cannot be updated, because it hasn't been added to json yet - add it
+            if (!mJsonBuilder->updateStatus(OperationType::Update, lCheckBucket->name())) {
+                EEFolderParseController *lCurrentFolderParser = new  EEFolderParseController(this);
+                lCurrentFolderParser->startSubfoldersInitialization(mBucketFacade->workingDirectory() + lCheckBucket->name());
+                mJsonBuilder->addCurrentObjectToJson(QDateTime(), lCurrentFolderParser->rootModel());
+                mJsonBuilder->updateCurrentElementStatus();
+
+            }
+
             mSdk->destroyBucket(lCheckBucket->id());
 
             if (mBucketFacade->removeBucketByBucketId(lCheckBucket->id())) {
                 qDebug() << "Bucket removed from local list!";
             } else {
-                qDebug() << "Bucekt wasn't removed from list of local buckets!";
+                qDebug() << "Bucket wasn't removed from list of local buckets!";
             }
         } else {
             qDebug() << "Bucket is new and haven't been initialized to destruction!";
             qDebug() << "Try to create it...";
-            startUpdateNextBucket();
+            updateNextBucket();
         }
     } else {
         qDebug() << "All neccesary buckets removed! Start to upload...";
@@ -219,6 +296,8 @@ void EEDataLoader::createNextBucket()
     } else {
         qDebug() << "All new buckets were uploaded!";
         qDebug() << "Start to upload files into the old ones...";
+        mBucketFacade->setUpdateFilesQueueToUploadQueue();
+
         cloudFilesUpdating();
     }
 }
@@ -233,6 +312,8 @@ void EEDataLoader::createNextBucket()
 void EEDataLoader::bucketCreated(EEBucket *newbucket)
 {
     qDebug() << typeid(*this).name() << " : " << __FUNCTION__;
+
+    mJsonBuilder->updateCurrentElementStatus();
 
     mBucketFacade->setCurrentBucket(newbucket);
     mBucketFacade->addBucketToAllBuckets(newbucket);
@@ -271,13 +352,11 @@ void EEDataLoader::cloudFilesUpdating()
 {
     qDebug() << typeid(*this).name() << " : " << __FUNCTION__;
 
-    mBucketFacade->setUpdateFilesQueueToUploadQueue();
     //search buckets by name and delete by id
     if (mBucketFacade->setCurrentFileByUpdatingQueue()) {
-        //QString lFolderName = mBucketFacade->currentUploadingFile();
-        EEFile lCheckFile = mBucketFacade->currentUpdatingFile();
-        if (!lCheckFile.id().isEmpty()) {
-            mLoader->deleteFile(lCheckFile.bucketId(), lCheckFile.id());
+        EEFile *lCheckFile = mBucketFacade->currentUpdatingFile();
+        if (lCheckFile != nullptr) {
+            mLoader->deleteFile(lCheckFile->bucketId(), lCheckFile->id());
         } else {
             qDebug() << "Bucket is new and haven't been initialized to destruction!";
             qDebug() << "Try to move forward...";
@@ -285,7 +364,7 @@ void EEDataLoader::cloudFilesUpdating()
         }
     } else {
         qDebug() << "All cloud files are deleted!";
-        emit startFilesUpload();
+        emit startFilesUploading();
     }
 }
 
@@ -300,22 +379,21 @@ void EEDataLoader::uploadNextFiles()
     qDebug() << typeid(*this).name() << " : " << __FUNCTION__;
 
     if (mBucketFacade->setCurrentFileByUploadingQueue()) {
-        EEFile lCheckFile = mBucketFacade->currentUploadingFile();
+        EEFile *lCheckFile = mBucketFacade->currentUploadingFile();
+        mBucketFacade->setCurrentFileName(lCheckFile->filename());
 
-        QString lFolderName = EESettingsClass::getInstance().getSettingsValue(SettingsOptions::FolderName).toString();
+        QString lWorkingDirectory = mBucketFacade->workingDirectory();
 
-        if (lFolderName.isEmpty()) {
+        if (lWorkingDirectory.isEmpty()) {
             qDebug() << "Folder is not initalized!!!";
         }
 
-        EEBucket *lCheckBucket = mBucketFacade->bucketById(lCheckFile.bucketId());
+        EEBucket *lCheckBucket = mBucketFacade->bucketById(lCheckFile->bucketId());
+        mBucketFacade->setCurrentBucket(lCheckBucket);
+
         if (lCheckBucket != nullptr) {
             QString lBucketName = lCheckBucket->name();
-
             QString lSeparator = "/";
-        #ifdef WIN32
-            lSeparator = "\\";
-        #endif
 
             if (!lBucketName.isEmpty()) {
                 if (lBucketName.at(0) != lSeparator) {
@@ -323,15 +401,18 @@ void EEDataLoader::uploadNextFiles()
                 }
             }
 
-            mLoader->uploadData(lCheckFile.bucketId(),
-                                lFolderName + lBucketName + lSeparator + lCheckFile.filename());
+            //if file's status cannot be updated, because it hasn't been added to json yet - add it
+            if (!mJsonBuilder->updateStatus(OperationType::Upload, lBucketName, lCheckFile->filename())) {
+                mJsonBuilder->addCurrentObjectToJson();
+            }
+
+            mLoader->uploadData(lCheckFile->bucketId(),
+                                lWorkingDirectory + lBucketName + lSeparator + lCheckFile->filename());
         } else {
-            qDebug() << "Error! Bucket for uploading wasn't found!" << lCheckFile.bucketId();
+            qDebug() << "Error! Bucket for uploading wasn't found!" << lCheckFile->bucketId();
         }
-
-
     } else {
-        qDebug() << "Emit uploading finished...";
+        qDebug() << "Files uploading finished!";
         emit uploadingFinished();
     }
 }
@@ -346,10 +427,16 @@ void EEDataLoader::useNextBucketForDownloading()
     qDebug() << typeid(*this).name() << " : " << __FUNCTION__;
 
     if (mBucketFacade->setCurrentBucketByDownloadingQueue()) {
+        if (!mJsonBuilder->updateStatus(OperationType::Download, mBucketFacade->currentBucket()->name())) {
+            //use qpoiinter to avoid memory leaks
+            QPointer<EEFolderModel>lFolderModel = new EEFolderModel;
+            lFolderModel->setName(mBucketFacade->currentBucket()->name());;
+            mJsonBuilder->addCurrentObjectToJson(QDateTime(), lFolderModel);
+        }
         getFilesListForCurrentBucket();
     } else {
         qDebug() << "Start to download files from existing folders...";
-        emit newBucketsDownloaded();
+        emit startFilesDownloading();
     }
 }
 
@@ -365,12 +452,8 @@ void EEDataLoader::getFilesListForCurrentBucket()
 
     //create folder, if needed
     if (mBucketFacade->currentBucket() != nullptr) {
-
         QString lBucketName = mBucketFacade->currentBucket()->name();
         QString lSeparator = "/";
-    #ifdef WIN32
-        lSeparator = "\\";
-    #endif
 
         if (!lBucketName.isEmpty()) {
             if (lBucketName.at(0) != lSeparator) {
@@ -401,16 +484,16 @@ void EEDataLoader::cloudFilesDownloading()
     qDebug() << typeid(*this).name() << " : " << __FUNCTION__;
 
     if (mBucketFacade->setCurrentFileByDownloadingQueue()) {
-        EEFile lCheckFile = mBucketFacade->currentDownloadingFile();
-        EEBucket* lCurrentBucket = mBucketFacade->bucketById(lCheckFile.bucketId());
+        EEFile *lCheckFile = mBucketFacade->currentDownloadingFile();
+        EEBucket* lCurrentBucket = mBucketFacade->bucketById(lCheckFile->bucketId());
 
         if (lCurrentBucket!= nullptr) {
-            if (!lCheckFile.id().isEmpty()) {
+            if (lCheckFile != nullptr) {
+                mBucketFacade->setCurrentBucket(lCurrentBucket);
+                mBucketFacade->setCurrentFileName(lCheckFile->filename());
+
                 QString lBucketName = lCurrentBucket->name();
                 QString lSeparator = "/";
-            #ifdef WIN32
-                lSeparator = "\\";
-            #endif
 
                 if (!lBucketName.isEmpty()) {
                     if (lBucketName.at(0) != lSeparator) {
@@ -418,19 +501,25 @@ void EEDataLoader::cloudFilesDownloading()
                     }
                 }
 
-                QString lPath = mBucketFacade->workingDirectory() + lBucketName + lSeparator + lCheckFile.filename();
-                mLoader->downloadFile(lCheckFile.bucketId(), lCheckFile.id(), lPath);
+                QString lPath = mBucketFacade->workingDirectory() + lBucketName ;
+
+                //if file's status cannot be updated, because it hasn't been added to json yet - add it
+                if (!mJsonBuilder->updateStatus(OperationType::Download, lBucketName, lCheckFile->filename())) {
+                    mJsonBuilder->addCurrentObjectToJson();
+                }
+
+                mLoader->downloadFile(lCheckFile->bucketId(), lCheckFile->id(),
+                                      lPath + lSeparator + lCheckFile->filename());
             } else {
-                qDebug() << "Error! Bucket for downloading wasn't found!" << lCheckFile.bucketId();
+                qDebug() << "Error! Bucket for downloading wasn't found!" << lCheckFile->bucketId();
             }
         } else {
-            qDebug() << "No bucket with such id! File cannot be downloaded..." << lCheckFile.bucketId();
+            qDebug() << "No bucket with such id! File cannot be downloaded..." << lCheckFile->bucketId();
             qDebug() << "Try to use next file for download...";
             cloudFilesDownloading();
         }
     } else {
         qDebug() << "All data has been downloaded/uploaded!";
-        qDebug() << "Start to syncronizate dates...";
-        emit startDateSyncronization();
+        EEStatusTimer::getInstance().startTimer();
     }
 }

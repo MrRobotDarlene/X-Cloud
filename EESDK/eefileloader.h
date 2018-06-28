@@ -7,9 +7,17 @@
 #include <QObject>
 
 class EEFileLoader;
-
+/**
+ * @brief gCryptoPointer
+ * Variable to handle callbacks from c code
+ */
 extern EEFileLoader *gCryptoPointer;
 
+/**
+ * @brief The EEFileLoader class
+ * Class for uploading, downloading and deltiong data
+ * Also, handle its responces
+ */
 class EEFileLoader : public QObject
 {
     Q_OBJECT
@@ -24,7 +32,7 @@ public:
      * @param bucketId - id of bucket
      * @param name - path to file on the local machine
      */
-    void uploadData(QString bucketId, QString name);
+    void uploadData(const QString &bucketId, const QString &name);
 
     /**
      * @brief EEFileLoader::downloadFile
@@ -33,7 +41,7 @@ public:
      * @param bucketId
      * @param fileId
      */
-    void downloadFile(QString bucketId, QString fileId, QString fileName);
+    void downloadFile(const QString &bucketId, const QString &fileId, const QString &fileName);
 
     /**
      * @brief EEFileLoader::deleteFile
@@ -41,7 +49,7 @@ public:
      * @param bucketId
      * @param fileId
      */
-    void deleteFile(QString bucketId, QString fileId);
+    void deleteFile(const QString &bucketId, const QString &fileId);
     /**
      * @brief EEFileLoader::handleCallbackResult
      * Method, which handle callback about download/upload from .c program
@@ -52,8 +60,11 @@ public:
 
 signals:
     void fileUploaded();
+    void fileUploadingError();
     void fileDownloaded();
+    void fileDowloadingError();
     void fileDeleted();
+    void fileDeletionError();
 
 private:
     EESDK *mSdk;

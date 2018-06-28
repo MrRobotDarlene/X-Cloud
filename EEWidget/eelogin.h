@@ -35,7 +35,6 @@ private slots:
      */
     void on_pushButtonLogin_clicked();
 
-
     /**
      * @brief EELogin::on_pushButtonRegister_clicked
      * Call registration window

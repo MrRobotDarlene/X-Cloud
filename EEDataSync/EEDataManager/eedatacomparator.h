@@ -2,19 +2,19 @@
 #define EEDATACOMPARATOR_H
 
 #include <QObject>
-#include "EEDataSync/EEParser/eemodel.h"
-#include "EEContainers/eefile.h"
-#include "eefoldermodel.h"
+#include "EEDataSync/EELocalDataParser/eemodel.h"
+#include "EEDataSync/EELocalDataParser/eefoldermodel.h"
 
 class EESDK;
 class EEBucketFacade;
 class EEFolderParseController;
+class EEFile;
 
 /**
  * @brief The EEDataComparator class
  * Class, used to compare local data
  * with cloud data. Based on this comparation
- * build folders, files, which has to be uploaded or downloaded
+ * build folders, files, which has to be uploaded, downloaded or deleted
  */
 class EEDataComparator : public QObject
 {
@@ -22,6 +22,12 @@ class EEDataComparator : public QObject
 public:
     explicit EEDataComparator(EESDK *sdk, EEBucketFacade *facade, EEFolderParseController *folderParseController, QObject *parent = nullptr);
 
+    /**
+     * @brief EEDataComparator::initializeComparationLocalDataWithJson
+     * Initialize process of comparation local data with json data
+     * @param jsonFolderModel
+     */
+    void initializeOutdatedDataComparation(EEFolderModel *jsonFolderModel, EEFolderModel *cloudFolderModel);
     /**
      * @brief EEDataComparator::startCompareData
      * Start process of data comparation.
@@ -32,6 +38,30 @@ public:
      */
     void startCompareData();
 private:
+    /**
+     * @brief EEDataComparator::addFolderWithSubfoldersToDeletionList
+     * Recursively add bucket and its subbuckets to deletion list
+     * @param model
+     */
+    void addFolderWithSubfoldersToDeletionList(EEFolderModel *model);
+
+    /**
+     * @brief EEDataComparator::compareLocalFilesWithJson
+     * If file is not exists locally anymore - add to deletion files list
+     * @param localFolder - local folder, which files have to be compared
+     * @param jsonFolder - same folder as it described in json
+     */
+    void compareLocalFilesWithJson(EEFolderModel *localFolder, EEFolderModel *jsonFolder, EEFolderModel *cloudFolder);
+
+    /**
+     * @brief EEDataComparator::compareLocalFoldersWithJson
+     * Compare local folders with json.
+     * If exists in both - start to compare files too
+     * IF exists in json and not locally - add to deletion list
+     * @param localFolder - root local folder
+     * @param jsonFolder - root json folder
+     */
+    void compareLocalFoldersWithJson(EEFolderModel *localFolder, EEFolderModel *jsonFolder, EEFolderModel *cloudFolder);
     /**
      * @brief EEDataManager::buildUpdateDataQueue
      * Build list of buckets, which have to be updated
@@ -54,7 +84,7 @@ private:
      * @param cloudFiles - list of cloud files
      * @param bucketName
      */
-    void buildUpdateFilesForFolder(QList<EEModel *> localFiles, QList<EEFile> cloudFiles, QString bucketName);
+    void buildUpdateFilesForFolder(QList<EEModel *> localFiles, QList<EEFile *> cloudFiles, QString bucketName);
 
 
     /**
@@ -73,19 +103,15 @@ private:
      * @param name- local file name
      * @return
      */
-    bool listHasName(QList<EEFile> list, QString name);
+    bool listHasName(QList<EEFile *> list, QString name);
 
 
 signals:
-
     void dataCompared();
-public slots:
 private:
     EESDK *mSdk;
     EEBucketFacade *mBucketFacade;
     EEFolderParseController *mFolderParseController;
-
-
 };
 
 #endif // EEDATACOMPARATOR_H

@@ -1,5 +1,5 @@
 #include "eebucketfacade.h"
-#include "eefoldermodel.h"
+#include "EEDataSync/EELocalDataParser/eefoldermodel.h"
 #include "EESDK/EEContainers/eebucket.h"
 #include "EESDK/EEContainers/eefile.h"
 
@@ -7,22 +7,33 @@
 #include "eebucketdownloadinghandler.h"
 #include "eebucketuploadinghandler.h"
 #include "eebucketupdatinghandler.h"
+#include "eebucketdeletionhandler.h"
+#include "eeoutdateddataholder.h"
+#include "eebaseoutdateddataholder.h"
 
 #include <QDebug>
+#include <typeinfo>
 
 EEBucketFacade::EEBucketFacade(QObject *parent)
     : QObject(parent),
       mBucketDataHolder{new EEBucketDataHolder()},
       mDownloadingHandler{new EEBucketDownloadingHandler(mBucketDataHolder)},
       mUploadingHandler{new EEBucketUploadingHandler(mBucketDataHolder)},
-      mUpdatingHandler{new EEBucketUpdatingHandler(mBucketDataHolder)}
+      mUpdatingHandler{new EEBucketUpdatingHandler(mBucketDataHolder)},
+      mBucketDeletionHandler{new EEBucketDeletionHandler{mBucketDataHolder}},
+      mOutdatedDataHolder{new EEOutdatedDataHolder},
+      mCorruptedDataHolder{new EEBaseOutdatedDataHolder}
 {
-    qDebug() << typeid(*this).name() << " : " << __FUNCTION__;
 }
 
 EEBucketFacade::~EEBucketFacade()
 {
     qDebug() << typeid(*this).name() << " : " << __FUNCTION__;
+
+    delete mCorruptedDataHolder;
+    delete mOutdatedDataHolder;
+
+    delete mBucketDeletionHandler;
 
     delete mBucketDataHolder;
     delete mDownloadingHandler;
@@ -32,7 +43,7 @@ EEBucketFacade::~EEBucketFacade()
 
 void EEBucketFacade::addElementToUploadBucketQueue(EEFolderModel *folder)
 {
-    mUploadingHandler->addElementToUploadingBucketQueue(folder);
+    mUploadingHandler->addElementToBucketQueue(folder);
 }
 
 void EEBucketFacade::initializeDownloadingQueue()
@@ -42,7 +53,7 @@ void EEBucketFacade::initializeDownloadingQueue()
 
 QQueue<EEFolderModel *> EEBucketFacade::uploadingBucketsQueue() const
 {
-    return mUploadingHandler->uploadingBucketsQueue();
+    return mUploadingHandler->bucketsQueue();
 }
 
 QQueue<EEBucket*> EEBucketFacade::downloadingBucketsQueue() const
@@ -67,7 +78,7 @@ bool EEBucketFacade::removeBucketFromDownloadingQueue(EEBucket *bucket)
 
 bool EEBucketFacade::setCurrentFolderModelByUploadingBucket()
 {
-    return mUploadingHandler->setCurrentFolderModelByUploadingBucket();
+    return mUploadingHandler->setCurrentFolderModelByBucket();
 }
 
 void EEBucketFacade::setCurrentFileIndex(int index)
@@ -122,22 +133,22 @@ QString EEBucketFacade::currentUploadingFileNameFromFolderModel() const
 
 bool EEBucketFacade::setCurrentFileByUploadingQueue()
 {
-    return mUploadingHandler->setCurrentFileByUploadingQueue();
+    return mUploadingHandler->setCurrentFileQueueByQueue();
 }
 
-EEFile EEBucketFacade::currentUploadingFile()
+EEFile *EEBucketFacade::currentUploadingFile()
 {
-    return mUploadingHandler->currentUploadingFile();
+    return mUploadingHandler->currentFile();
 }
 
 void EEBucketFacade::addModelToUploadFilesQueue(QString fileName, QString bucketId)
 {
-    mUploadingHandler->addModelToUploadFilesQueue(fileName, bucketId);
+    mUploadingHandler->addModelToFilesQueue(fileName, bucketId);
 }
 
-QQueue<EEFile> EEBucketFacade::uploadingFilesQueue() const
+QQueue<EEFile*> EEBucketFacade::uploadingFilesQueue() const
 {
-    return mUploadingHandler->uploadingFilesQueue();
+    return mUploadingHandler->filesQueue();
 }
 
 QString EEBucketFacade::currentUpdatingFileNameFromFolderModel() const
@@ -175,14 +186,34 @@ EEBucket *EEBucketFacade::bucketById(QString bucketId) const
     return mBucketDataHolder->bucketById(bucketId);
 }
 
-void EEBucketFacade::addFilesListByBucketId(QString bucketId, QList<EEFile> files)
+void EEBucketFacade::setCurrentFileName(QString file)
+{
+    mBucketDataHolder->setCurrentFileName(file);
+}
+
+QString EEBucketFacade::currentFileName() const
+{
+    return mBucketDataHolder->currentFileName();
+}
+
+void EEBucketFacade::addFilesListByBucketId(QString bucketId, QList<EEFile*> files)
 {
     mBucketDataHolder->addFilesListByBucketId(bucketId, files);
 }
 
-QList<EEFile> EEBucketFacade::filesByBucketId(QString bucketId)
+QList<EEFile*> EEBucketFacade::filesByBucketId(QString bucketId)
 {
     return mBucketDataHolder->filesByBucketId(bucketId);
+}
+
+EEFile *EEBucketFacade::bucketFileByName(QString fileName, QString bucketId)
+{
+    return mBucketDataHolder->bucketFileByName(fileName, bucketId);
+}
+
+bool EEBucketFacade::removeFileFromBucket(QString fileName, QString bucketId)
+{
+    return mBucketDataHolder->removeFileFromBucket(fileName, bucketId);
 }
 
 bool EEBucketFacade::setNextCurrentBucket()
@@ -195,44 +226,59 @@ bool EEBucketFacade::removeBucketByBucketId(QString bucketId)
     return mBucketDataHolder->removeBucketByBucketId(bucketId);
 }
 
-void EEBucketFacade::setOneBucketDownloadingQueueFiles(QList<EEFile> files)
+bool EEBucketFacade::removeBucketFromTreeById(QString bucketId)
 {
-    mDownloadingHandler->setOneBucketDownloadingQueueFiles(files);
+    return mBucketDataHolder->removeBucketFromTreeById(bucketId);
 }
 
-bool EEBucketFacade::removeFileFromOneBucketDownloadingQueue(EEFile file)
+void EEBucketFacade::buildLocalFormFromBucket()
 {
-    return mDownloadingHandler->removeFileFromOneBucketDownloadingQueue(file);
+    mBucketDataHolder->buildLocalFormFromBucket();
 }
 
-int EEBucketFacade::currentFilesListSize()
+EEFolderModel *EEBucketFacade::bucketsFolderModelForm() const
 {
-    return mDownloadingHandler->currentFilesListSize();
+    return mBucketDataHolder->bucketsFolderModelForm();
 }
 
-EEFile EEBucketFacade::currentFile() const
+void EEBucketFacade::setTemporaryDownloadingQueueFiles(QList<EEFile*> files)
 {
-    return mDownloadingHandler->currentFile();
+    mDownloadingHandler->setTemporaryDownloadingQueueFiles(files);
+}
+
+bool EEBucketFacade::removeFileFromTemporaryDownloadingQueue(EEFile *file)
+{
+    return mDownloadingHandler->removeFileFromTemporaryDownloadingQueue(file);
+}
+
+int EEBucketFacade::temporaryBucketFilesListSize()
+{
+    return mDownloadingHandler->temporaryBucketFilesListSize();
+}
+
+EEFile *EEBucketFacade::temporaryBucketCurrentFile() const
+{
+    return mDownloadingHandler->temporaryBucketCurrentFile();
 }
 
 void EEBucketFacade::addCurrentFilesToDownloadQueue()
 {
-    mDownloadingHandler->addCurrentFilesToDownloadQueue();
+    mDownloadingHandler->addFilesListToQueue();
 }
 
 bool EEBucketFacade::setCurrentFileByDownloadingQueue()
 {
-    return mDownloadingHandler->setCurrentFileByDownloadingQueue();
+    return mDownloadingHandler->setCurrentFileQueueByQueue();
 }
 
-EEFile EEBucketFacade::currentDownloadingFile()
+EEFile *EEBucketFacade::currentDownloadingFile()
 {
-    return mDownloadingHandler->currentDownloadingFile();
+    return mDownloadingHandler->currentFile();
 }
 
-QQueue<EEFile> EEBucketFacade::downloadingFileQueue() const
+QQueue<EEFile*> EEBucketFacade::downloadingFileQueue() const
 {
-    return mDownloadingHandler->downloadingFileQueue();
+    return mDownloadingHandler->filesQueue();
 }
 
 void EEBucketFacade::setWorkingDirectory(QString directory)
@@ -262,7 +308,7 @@ void EEBucketFacade::addBucketToDownloadingQueue(EEBucket* bucket)
 
 void EEBucketFacade::addBucketToUploadingQueue(EEFolderModel* folder)
 {
-    mUploadingHandler->addElementToUploadingBucketQueue(folder);
+    mUploadingHandler->addElementToBucketQueue(folder);
 }
 
 EEBucket *EEBucketFacade::bucketByName(QString bucketName) const
@@ -271,12 +317,7 @@ EEBucket *EEBucketFacade::bucketByName(QString bucketName) const
 
     auto lAllBuckets = mBucketDataHolder->allBuckets();
 
-    QString lSeparator;
-#ifdef WIN32
-    lSeparator = "\\";
-#else
-     lSeparator = "/";
-#endif
+    QString lSeparator =  "/";
     for (auto bucket : lAllBuckets) {
         if (bucket->name() == bucketName) {
             lBucket = bucket;
@@ -295,47 +336,70 @@ QQueue<EEFolderModel *> EEBucketFacade::updateBucketQueue() const
 {
     qDebug() << typeid(*this).name() << " : " << __FUNCTION__;
 
-    return mUpdatingHandler->updatingBucketQueue();
+    return mUpdatingHandler->bucketsQueue();
 }
 
 void EEBucketFacade::addElementToUpdateBucketQueue(EEFolderModel *folder)
 {
-    mUpdatingHandler->addElementToUpdateBucketQueue(folder);
+    mUpdatingHandler->addElementToBucketQueue(folder);
 }
 
-void EEBucketFacade::addFileToUpdateFileQueue(EEFile file)
+void EEBucketFacade::addFileToUpdateFileQueue(EEFile *file)
 {
-    mUpdatingHandler->addFileToUpdateFileQueue(file);
+    mUpdatingHandler->addFileToFileQueue(file);
 }
 
-QQueue<EEFile> EEBucketFacade::updatingFilesQueue()
+QQueue<EEFile*> EEBucketFacade::updatingFilesQueue()
 {
-    return mUpdatingHandler->updatingFilesQueue();
+    return mUpdatingHandler->filesQueue();
 }
 
 bool EEBucketFacade::setCurrentFileByUpdatingQueue()
 {
-    qDebug() << typeid(*this).name() << " : " << __FUNCTION__;
-
-    return mUpdatingHandler->setCurrentFileByUpdatingQueue();
+    return mUpdatingHandler->setCurrentFileQueueByQueue();
 }
 
-EEFile EEBucketFacade::currentUpdatingFile()
+EEFile *EEBucketFacade::currentUpdatingFile()
 {
-    return mUpdatingHandler->currentUpdatingFile();
+    return mUpdatingHandler->currentFile();
+}
+
+void EEBucketFacade::addToDeletionBucketQueue(EEBucket *bucket)
+{
+    mBucketDeletionHandler->addToDeletionBucketQueue(bucket);
+}
+
+EEBucket *EEBucketFacade::nextBucketToRemove()
+{
+    return mBucketDeletionHandler->nextBucketToRemove();
+}
+
+void EEBucketFacade::addToDeletionFilesList(EEFile *file)
+{
+    mBucketDeletionHandler->addFileToFileQueue(file);
+}
+
+bool EEBucketFacade::setCurrentFileByDeletionQueue()
+{
+    return mBucketDeletionHandler->setCurrentFileQueueByQueue();
+}
+
+EEFile *EEBucketFacade::currentDeletionFile()
+{
+    return mBucketDeletionHandler->currentFile();
 }
 
 void EEBucketFacade::initializeUploadingBucketsQueueFromUpdateQueue()
 {
-    mUploadingHandler->setUploadingBucketQueue(mUpdatingHandler->updatingBucketQueue());
+    mUploadingHandler->setBucketQueue(mUpdatingHandler->bucketsQueue());
 }
 
 bool EEBucketFacade::setCurrentFolderModelByUpdatingBucket()
 {
-    return mUpdatingHandler->setCurrentFolderModelByUpdatingBucket();
+    return mUpdatingHandler->setCurrentFolderModelByBucket();
 }
 
-bool EEBucketFacade::setCurrentBucketsQueueByUpdatingBucket()
+void EEBucketFacade::setCurrentBucketsQueueByUpdatingBucket()
 {
     qDebug() << typeid(*this).name() << " : " << __FUNCTION__;
 
@@ -343,13 +407,98 @@ bool EEBucketFacade::setCurrentBucketsQueueByUpdatingBucket()
         mDownloadingHandler->downloadingBucketsQueue().clear();
     }
 
-    for (auto bucket : mUpdatingHandler->uploadingBucketsQueue()) {
+    for (auto bucket : mUpdatingHandler->bucketsQueue()) {
         mDownloadingHandler->addBucketToDownloadingQueue(bucketByName(bucket->name()));
     }
 
 }
 
-bool EEBucketFacade::setUpdateFilesQueueToUploadQueue()
+void EEBucketFacade::setUpdateFilesQueueToUploadQueue()
 {
-    mUploadingHandler->addQueueToUploadingFileQueue(mUpdatingHandler->updatingFilesQueue());
+    mUploadingHandler->addQueueToFileQueue(mUpdatingHandler->filesQueue());
+}
+
+void EEBucketFacade::addOutdatedCloudFile(EEFile *file)
+{
+    mOutdatedDataHolder->addCloudFile(file);
+}
+
+void EEBucketFacade::addOutdatedLocalFile(QString fileName)
+{
+    mOutdatedDataHolder->addLocalFile(fileName);
+}
+
+void EEBucketFacade::addOutdateFolderToRemoveList(EEFolderModel *folderModel)
+{
+    mOutdatedDataHolder->addOutdateFolderToRemoveList(folderModel);
+}
+
+QList<EEFolderModel *> EEBucketFacade::outdatedLocalFolders() const
+{
+    return mOutdatedDataHolder->outdatedLocalFolders();
+}
+
+QList<EEFile *> EEBucketFacade::outDatedCloudFiles() const
+{
+    return mOutdatedDataHolder->cloudFilesToRemove();
+}
+
+EEFile *EEBucketFacade::firstOutDateElement() const
+{
+    return mOutdatedDataHolder->firstElement();
+}
+
+void EEBucketFacade::removeFirstOutdated()
+{
+    mOutdatedDataHolder->removeFirst();
+}
+
+QList<EEFolderModel *> EEBucketFacade::outDatedLocalFolderWithFilesToRemove() const
+{
+    return mOutdatedDataHolder->localFolderWithFilesToRemove();
+}
+
+void EEBucketFacade::clearOutDatedFiles()
+{
+    mOutdatedDataHolder->clearLocalValues();
+}
+
+void EEBucketFacade::clearOutDatedFolderList()
+{
+    mOutdatedDataHolder->clearOutDatedFolderList();
+}
+
+void EEBucketFacade::addCorruptedCloudFile(EEFile *file)
+{
+    mCorruptedDataHolder->addCloudFile(file);
+}
+
+void EEBucketFacade::addCorruptedLocalFile(QString fileName)
+{
+    mCorruptedDataHolder->addLocalFile(fileName);
+}
+
+QList<EEFile *> EEBucketFacade::corruptedCloudFiles() const
+{
+    return mCorruptedDataHolder->cloudFilesToRemove();
+}
+
+EEFile *EEBucketFacade::firstCorruptedElement() const
+{
+    return mCorruptedDataHolder->firstElement();
+}
+
+void EEBucketFacade::removeFirstCorrupted()
+{
+    mCorruptedDataHolder->removeFirst();
+}
+
+QList<EEFolderModel *> EEBucketFacade::corruptedFoldersWithFilesToRemove() const
+{
+    return mCorruptedDataHolder->localFolderWithFilesToRemove();
+}
+
+void EEBucketFacade::clearCorruptedLocalValues()
+{
+    mCorruptedDataHolder->clearLocalValues();
 }

@@ -18,7 +18,9 @@ class EESyncronizationFolderForm :  public EEWidget
 
 public:
     explicit EESyncronizationFolderForm(EESDK *sdk, QWidget *parent = 0);
+
     ~EESyncronizationFolderForm();
+
     void resetDefaultPath();
 signals:
     void newFolderChoosed(QString);

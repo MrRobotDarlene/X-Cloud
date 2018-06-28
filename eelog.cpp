@@ -1,4 +1,5 @@
 #include "eelog.h"
+#include "globalconstants.h"
 #include <QFile>
 #include <QTextStream>
 #include <QDebug>
@@ -11,7 +12,7 @@
 #include <iostream>
 #endif
 
-
+const QString EELog::mlogFileName("app_log.txt");
 /**
  * @brief EELog::getInstance
  * @return
@@ -27,11 +28,11 @@ EELog *EELog::getInstance() {
  */
 EELog::EELog(QObject *parent) :
     QObject(parent),
-    mLogFileName{"app_log.txt"},
-    mLogFilePath{ QCoreApplication::applicationDirPath() + QString("//temp//")},
+    mLogFileName{mlogFileName},
+    mLogFilePath{ QCoreApplication::applicationDirPath() + "/" + GlobalData::gTemporaryFolder + "/"},
     mLogLinesCounter{0}
 {
-    QString lPathToTemp = QCoreApplication::applicationDirPath() + QString("//temp//");
+    QString lPathToTemp = QCoreApplication::applicationDirPath() + "/" + GlobalData::gTemporaryFolder + "/";
     if (!QDir(lPathToTemp).exists()) {
         qDebug() << "Create log folder";
         QDir().mkdir(lPathToTemp);
@@ -53,15 +54,14 @@ void EELog::initialise() {
 
     // Open current log file and read lines count.
     if (mOutLogFile->open(QIODevice::ReadOnly)) {
-        QTextStream inputStream(mOutLogFile);
-        while (!inputStream.atEnd()) {
-            inputStream.readLine();
+        QTextStream lInputStream(mOutLogFile);
+        while (!lInputStream.atEnd()) {
+            lInputStream.readLine();
             mLogLinesCounter ++;
         }
         mOutLogFile->close();
     }
 }
-
 
 /**
  * @brief EELog::writeLog
@@ -135,6 +135,10 @@ void EELog::DefaultMessageHandler(QtMsgType type, const QMessageLogContext &cont
         }
         case QtFatalMsg: {
             lMessage = QString(timeStamp + " Fatal: %1").arg(QString(msg));
+            break;
+        }
+        case QtInfoMsg: {
+            lMessage = QString(timeStamp + " Information: %1").arg(QString(msg));
             break;
         }
     }

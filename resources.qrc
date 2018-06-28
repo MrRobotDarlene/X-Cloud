@@ -1,7 +1,9 @@
 <RCC>
     <qresource prefix="/">
-        <file>resources/logo.png</file>
-        <file>resources/logo.icns</file>
-        <file>resources/logo.ico</file>
+        <file>resources/xcloud.desktop</file>
+        <file>resources/xcloud.svg</file>
+        <file>resources/xcloud.icns</file>
+        <file>resources/xcloud.png</file>
+        <file>resources/xcloud_128.png</file>
     </qresource>
 </RCC>

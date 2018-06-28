@@ -6,6 +6,8 @@
 
 #include <QDebug>
 
+#include <typeinfo>
+
 #define STYLE_OK    "border: 1px solid gray"
 #define STYLE_ERROR "border: 1px solid red"
 
@@ -103,7 +105,7 @@ void EELogin::on_lineEditPassword_textChanged(const QString &)
  */
 void EELogin::requestError(EEError err, QString method)
 {
-    if (method == MTD_GET_BUCKETS) {
+    if (method == EESDK::mMtdGetBuckets) {
         ui->labelMessage->setText(err.message());
     }
 }

@@ -6,17 +6,33 @@
 #include <QNetworkReply>
 #include <QCryptographicHash>
 
+
+const QString EESDK::mMtdKey("Called method");
+const QString EESDK::mMtdGetBuckets("Get list of buckets");
+const QString EESDK::mMtdGetFilesForBuckets("Get files list of buckets");
+const QString EESDK::mMtdCreateBucket("Create new bucket");
+const QString EESDK::mMtdDestroyBucket("Destroy bucket for given id");
+const QString EESDK::mMtdFileInfo("Get file metadata");
+
+const QString EESDK::mMtdRegisterUser("Register new user");
+
+const QString EESDK::mMtdLoginInCivic("Login in user");
+const QString EESDK::mMtdRegistrationCivic("Registration in user");
+const QString EESDK::mMtdAuthorization("Authorize using xtoken");
+
+const QString EESDK::mMtdDeleteFileFromBucket("Delete file");
+
+//#define BRIDGE  "https://api.storj.io"
+const QString EESDK::mBridgeAddress("http://api.internxt.com:6382");
+
+const QString EESDK::mCommandBuckets("buckets");
+const QString EESDK::mCommandToken("token");
+const QString EESDK::mCommandFiles("files");
+const QString EESDK::mCommandUsers("users");
+const QString EESDK::mCommandInformation("info");
+const QString EESDK::mCommandXCloud("xcloud");
+
 #define UNDEFINED   "-1"
-
-#define BRIDGE  "http://52.53.254.169"
-
-#define CMD_BUCKETS "buckets"
-#define CMD_TOKENS  "tokens"
-#define CMD_TOKEN   "token"
-#define CMD_FRAMES  "frames"
-#define CMD_FILES   "files"
-#define CMD_SHARDS  "shards"
-#define CMD_USERS   "users"
 
 EESDK::EESDK(QObject *parent) : QObject(parent)
 {
@@ -26,20 +42,28 @@ EESDK::EESDK(QObject *parent) : QObject(parent)
 
 EESDK::~EESDK()
 {
-    qDebug() << typeid(*this).name() << " : " << __FUNCTION__;
-
     delete mMgr;
 }
 
-void EESDK::setCredentials(QString email, QString password)
+void EESDK::setCredentials(const QString& login,const  QString& password)
 {
-    mEmail = email;
+    mLogin = login;
     mPassword = password;
 }
 
-QString EESDK::getEmail() const
+void EESDK::setBasicAuthorizationData(const QString &basicAuthorizationData)
 {
-    return mEmail;
+    mBasicAuthorizationData = basicAuthorizationData;
+}
+
+QString EESDK::getBasicAuthorizationData() const
+{
+    return mBasicAuthorizationData;
+}
+
+QString EESDK::getLogin() const
+{
+    return mLogin;
 }
 
 QString EESDK::getPassword() const
@@ -49,13 +73,36 @@ QString EESDK::getPassword() const
 
 QString EESDK::getBridge()
 {
-    return BRIDGE;
+    return mBridgeAddress;
 }
 
-void EESDK::registerUser(QString email, QString password, QString pubkey, QString referalKey)
+void EESDK::authorizeUsingXToken(const QString &xtoken)
 {
-    QUrl lServiceURL(QString(BRIDGE).append("/").append(CMD_USERS));
-    QNetworkRequest lRequest = request(lServiceURL, MTD_REGISTER_USER);
+    QUrl lServiceURL(QString(mBridgeAddress).append("/").append(mCommandXCloud));
+
+    mMgr->get(civicRequest(lServiceURL, mMtdAuthorization, "authorization", xtoken));
+}
+
+void EESDK::loginInWithCivic(const QString &civicToken)
+{
+    QUrl lServiceURL(QString(mBridgeAddress).append("/").append(mCommandXCloud).append("/").append(mCommandToken));
+
+    mMgr->get(civicRequest(lServiceURL, mMtdLoginInCivic, "civic", civicToken));
+}
+
+void EESDK::registrateWithCivic(const QString &civicToken)
+{
+    QUrl lServiceURL(QString(mBridgeAddress).append("/").append(mCommandUsers));
+    QNetworkRequest lRequest = civicRequest(lServiceURL, mMtdRegistrationCivic, "civic", civicToken);
+    QByteArray lBody = "";
+
+    mMgr->post(lRequest, lBody);
+}
+
+void EESDK::registerUser(const QString &email, const  QString &password, const QString &pubkey, const QString &referalKey)
+{
+    QUrl lServiceURL(QString(mBridgeAddress).append("/").append(mCommandUsers));
+    QNetworkRequest lRequest = request(lServiceURL, mMtdRegisterUser);
     QByteArray lBody = EESDKParser::jsonCreateUserRegister(email, password, pubkey, referalKey);
 
     mMgr->post(lRequest, lBody);
@@ -63,109 +110,74 @@ void EESDK::registerUser(QString email, QString password, QString pubkey, QStrin
 
 void EESDK::getBuckets()
 {
-    QUrl lServiceURL(QString(BRIDGE).append("/").append(CMD_BUCKETS));
-    mMgr->get(request(lServiceURL, MTD_GET_BUCKETS));
+    QUrl lServiceURL(QString(mBridgeAddress).append("/").append(mCommandBuckets));
+    mMgr->get(request(lServiceURL, mMtdGetBuckets));
 }
 
-void EESDK::getFilesFromBucket(QString bucket, QString startDate)
+void EESDK::getFilesFromBucket(const QString &bucketId)
 {
-    QUrl lServiceURL(QString(BRIDGE).append("/").append(CMD_BUCKETS).append("/").append(bucket).append("/").append(CMD_FILES));
-    mMgr->get(request(lServiceURL, MTD_GET_FILES_FOR_BUCKETS));
+    QUrl lServiceURL(QString(mBridgeAddress)
+                     .append("/")
+                     .append(mCommandBuckets)
+                     .append("/")
+                     .append(bucketId)
+                     .append("/")
+                     .append(mCommandFiles));
+
+    mMgr->get(request(lServiceURL, mMtdGetFilesForBuckets));
 }
 
-void EESDK::getFileInfo(QString bucket, QString fileId, QString skip, QString limit, QString exclude)
+void EESDK::getFileInfo(const QString &bucketId, const QString &fileId)
 {
-    QUrl lServiceURL(QString(BRIDGE).append("/").append(CMD_BUCKETS).append("/").append(bucket).append("/").append(CMD_FILES).append(fileId));
+    QUrl lServiceURL(QString(mBridgeAddress).append("/")
+                     .append(mCommandBuckets).append("/")
+                     .append(bucketId).append("/")
+                     .append(mCommandFiles)
+                     .append(fileId)
+                     .append("/")
+                     .append(mCommandInformation));
 
+    mMgr->get(request(lServiceURL, mMtdFileInfo));
 }
 
-void EESDK::createBucket(QString name, QStringList pubKeys)
+void EESDK::createBucket(const QString &name, QStringList pubKeys)
 {
-    QUrl lServiceURL(QString(BRIDGE).append("/").append(CMD_BUCKETS));
+    QUrl lServiceURL(QString(mBridgeAddress).append("/").append(mCommandBuckets));
     QByteArray lBody = EESDKParser::jsonCreateBucket(name, pubKeys);
-    QNetworkRequest lRequest = request(lServiceURL, MTD_CREATE_BUCKET);
+    QNetworkRequest lRequest = request(lServiceURL, mMtdCreateBucket);
 
     mMgr->post(lRequest, lBody);
 }
 
-void EESDK::destroyBucket(QString id)
+void EESDK::destroyBucket(const QString &id)
 {
-    QUrl lServiceURL(QString(BRIDGE).append("/").append(CMD_BUCKETS).append("/").append(id));
+    QUrl lServiceURL(QString(mBridgeAddress).append("/").append(mCommandBuckets).append("/").append(id));
 
-    mMgr->deleteResource(request(lServiceURL, MTD_DESTROY_BUCKET));
+    mMgr->deleteResource(request(lServiceURL, mMtdDestroyBucket));
 }
 
-void EESDK::createToken(QString id, QString file, QString operation)
+QNetworkRequest EESDK::civicRequest(QUrl url, const QString & method, QString key, QString value)
 {
-    QUrl lServiceURL(QString(BRIDGE).append("/").append(CMD_BUCKETS).append("/").append(id).append("/").append(CMD_TOKENS));
-    QByteArray lBody = EESDKParser::jsonCreateToken(file, operation);
-    QNetworkRequest lRequest = request(lServiceURL, MTD_CREATE_TOKEN);
+    QNetworkRequest lRequest(url);
+    lRequest.setRawHeader(key.toUtf8(), value.toUtf8());
+    lRequest.setRawHeader("Content-Type", "application/json; charset=utf-8");
+    lRequest.setRawHeader(mMtdKey.toLatin1(), method.toLatin1());
 
-    mMgr->post(lRequest, lBody);
+    return lRequest;
 }
 
-void EESDK::getListOfShards(QString bucketId, QString fileId)
+QNetworkRequest EESDK::request(QUrl url, const QString &method)
 {
-    QUrl lServiceURL(QString(BRIDGE).append("/").append(CMD_BUCKETS).append("/").append(bucketId).append("/").append(CMD_FILES).append("/").append(fileId));
-    mMgr->get(request(lServiceURL, MTD_GET_SHARDS));
-}
-
-void EESDK::addShardToFrame(EEShardRequest shard, QString frameId)
-{
-    QUrl lServiceURL(QString(BRIDGE).append("/").append(CMD_FRAMES).append("/").append(frameId));
-    mMgr->put(request(lServiceURL, MTD_ADD_SHARDS_TO_FRAME), EESDKParser::jsonCreateShardRequest(shard));
-}
-
-void EESDK::createFrame()
-{
-    QUrl lServiceURL(QString(BRIDGE).append("/").append(CMD_FRAMES));
-
-    mMgr->post(request(lServiceURL, MTD_CREATE_FRAME), QByteArray(""));
-}
-
-void EESDK::uploadShardToNode(EEShard shard, QByteArray data)
-{
-    QString lHost = QString("http://").append(shard.farmer().address().toString()).append(":").append(shard.farmer().port());
-    QString lUrlString = QString(lHost).append("/").append(CMD_SHARDS).append("/").append(shard.hash()).append("?").append(CMD_TOKEN).append("=").append(shard.token());
-
-
-    qDebug() << lUrlString;
-    QUrl lServiceURL(lUrlString);
-    QNetworkRequest lRequest(lServiceURL);
-    lRequest.setRawHeader("content-type", "application/octet-stream");
-    lRequest.setRawHeader("x-node-id", shard.farmer().nodeId().toUtf8());
-    lRequest.setRawHeader(MTD_KEY, MTD_UPLOAD_SHARD);
-
-    mMgr->post(lRequest, data);
-}
-
-void EESDK::downloadShardFromNode(EEShard shard)
-{
-    QString lHost = QString("http://").append(shard.farmer().address().toString()).append(":").append(shard.farmer().port());
-    QString lUrlString = QString(lHost).append("/").append(CMD_SHARDS).append("/").append(shard.hash()).append("?").append(CMD_TOKEN).append("=").append(shard.token());
-
-    QUrl lServiceURL(lUrlString);
-    QNetworkRequest lRequest(lServiceURL);
-    lRequest.setRawHeader("content-type", "application/octet-stream");
-    lRequest.setRawHeader("x-node-id", shard.farmer().nodeId().toUtf8());
-
-    lRequest.setRawHeader(MTD_KEY, MTD_DOWNLOD_SHARD);
-
-    mMgr->get(lRequest);
-}
-
-QNetworkRequest EESDK::request(QUrl url, QByteArray method)
-{
-    QByteArray lAuth = mEmail.toUtf8();
+    QByteArray lAuth = mLogin.toUtf8();
     lAuth.append(":");
     QByteArray lPass = QCryptographicHash::hash(mPassword.toUtf8(), QCryptographicHash::Sha256).toHex();
     lAuth.append(lPass);
 
     QNetworkRequest lRequest(url);
-    lRequest.setRawHeader("Authorization", "Basic " + lAuth.toBase64());
+    lRequest.setRawHeader("Authorization", "Basic " + lAuth.toBase64());// mBasicAuthorizationData.toUtf8());
     lRequest.setRawHeader("Content-Type", "application/x-www-form-urlencoded");
     lRequest.setRawHeader("Accept", "application/json");
-    lRequest.setRawHeader(MTD_KEY, method);
+    lRequest.setRawHeader(mMtdKey.toLatin1(), method.toLatin1());
     return lRequest;
 }
 
@@ -176,9 +188,9 @@ QString EESDK::getCommand(QNetworkReply *reply)
         rCommand = reply->request().url().path();
     }
     //remove /api/ if contains
-    if (rCommand.contains(BRIDGE)) {
-        int pos = rCommand.indexOf(BRIDGE);
-        rCommand.remove(pos, QString(BRIDGE).size());
+    if (rCommand.contains(mBridgeAddress)) {
+        int pos = rCommand.indexOf(mBridgeAddress);
+        rCommand.remove(pos, QString(mBridgeAddress).size());
     }
 
     return rCommand;
@@ -186,65 +198,67 @@ QString EESDK::getCommand(QNetworkReply *reply)
 
 void EESDK::handleBucketsResponse(QByteArray method, QByteArray data, QNetworkReply *)
 {
-    if (method == MTD_GET_BUCKETS) {
+    if (method == mMtdGetBuckets) {
         emit bucketsReceived(EESDKParser::parseBucketList(data));
-    } else if (method == MTD_CREATE_BUCKET) {
+    } else if (method == mMtdCreateBucket) {
         emit bucketCreated(EESDKParser::parseBucket(data));
-    } else if (method == MTD_DESTROY_BUCKET) {
+    } else if (method == mMtdDestroyBucket) {
         emit bucketDeleted(QString(data));
-    } else if (method == MTD_CREATE_TOKEN) {
-        emit tokenCreated(EESDKParser::parseToken(data));
-    } else if (method == MTD_GET_SHARDS) {
-        emit shardsReceived(EESDKParser::parseShards(data));
-    } else if (method == MTD_GET_FILES_FOR_BUCKETS) {
+    } else if (method == mMtdGetFilesForBuckets) {
         emit filesForBucketReceived(EESDKParser::parseFiles(data));
     }
 }
 
-void EESDK::handleFramesResponse(QByteArray method, QByteArray data, QNetworkReply *)
+void EESDK::handleUsersResponse(QByteArray method, QByteArray data, QNetworkReply *reply)
 {
-    if (method == MTD_CREATE_FRAME) {
-        emit frameCreated(EESDKParser::parseFrame(data));
-    } else if (method == MTD_ADD_SHARDS_TO_FRAME) {
-        emit shardAddedToFrame(EESDKParser::parseShard(data));
-    }
-}
-
-void EESDK::handleShardsResponse(QByteArray method, QByteArray data, QNetworkReply *)
-{
-    if (method == MTD_DOWNLOD_SHARD) {
-        emit shardDownloaded(data);
-    } else if (method == MTD_UPLOAD_SHARD) {
-        qDebug() << MTD_UPLOAD_SHARD << ":" << data;
-    }
-}
-
-void EESDK::handleUsersResponse(QByteArray method, QByteArray data, QNetworkReply *)
-{
-    if (method == MTD_REGISTER_USER) {
+    if (method == mMtdRegisterUser) {
         emit userRegistered(EESDKParser::parseUser(data));
+    } else if (method == mMtdRegistrationCivic) {
+#warning credentials suppose to be removed from header, so it has to be reworked somehow
+        QString lAuthorizationData = reply->rawHeader(QByteArray("x-user-data-email")) + ":" +  reply->rawHeader(QByteArray("x-user-data-phone"));
+        emit userRegistratedCivicUsingXData(lAuthorizationData);
+        //emit registrationTokenChecked(EESDKParser::parseXTokenResponse(data));
+    }
+}
+
+void EESDK::handleCivicResponse(QByteArray method, QByteArray data, QNetworkReply *reply)
+{
+    if (method == mMtdLoginInCivic) {
+#warning maybe replace here
+        //emit userLoggedInCivic(reply->rawHeader(QByteArray("x-token")));
+        QString lAuthorizationData = reply->rawHeader(QByteArray("x-user-data-email")) + ":" +  reply->rawHeader(QByteArray("x-user-data-phone"));
+        emit userLoggedInCivicUsingXData(lAuthorizationData);
+
+#warning rework signal-slot connection with two string x-token, public key
+        //emit userLoggedInCivic(reply->rawHeader(QByteArray("x-token"), parsePublicKey(data)));
+    } else if (method == mMtdAuthorization) {
+        emit xtokenChecked(EESDKParser::parseXTokenResponse(data));
     }
 }
 
 void EESDK::handleResponse(QNetworkReply *reply)
 {
-    QByteArray lResponceData = reply->readAll();
-    QByteArray lMethod = reply->request().rawHeader(MTD_KEY);
+    QByteArray lResponseData = reply->readAll();
+    QByteArray lErrorData = reply->errorString().toLatin1();
+    QByteArray lMethod = reply->request().rawHeader(mMtdKey.toLatin1());
     EEError lError;
 
-    qDebug() << "Responce: " << lResponceData;
+    qDebug() << reply->rawHeaderPairs();
+    qDebug() << "Responce: " << lResponseData;
 
-    if (EESDKParser::isError(lResponceData, &lError)) {
+    if (!lErrorData.isEmpty()) {
+        qDebug() << "Error" << lErrorData;
+    }
+
+    if (EESDKParser::isError(lResponseData, &lError)) {
         emit requestError(lError, lMethod);
     } else {
-        if (getCommand(reply).contains(CMD_BUCKETS)) {
-            handleBucketsResponse(lMethod, lResponceData, reply);
-        } else if (getCommand(reply).contains(CMD_FRAMES)) {
-            handleFramesResponse(lMethod, lResponceData, reply);
-        } else if (getCommand(reply).contains(CMD_SHARDS)) {
-            handleShardsResponse(lMethod, lResponceData, reply);
-        } else if (getCommand(reply).contains(CMD_USERS)) {
-            handleUsersResponse(lMethod, lResponceData, reply);
+        if (getCommand(reply).contains(mCommandBuckets)) {
+            handleBucketsResponse(lMethod, lResponseData, reply);
+        } else if (getCommand(reply).contains(mCommandUsers)) {
+            handleUsersResponse(lMethod, lResponseData, reply);
+        } else if (getCommand(reply).contains(mCommandXCloud)) {
+            handleCivicResponse(lMethod, lResponseData, reply);
         }
     }
 

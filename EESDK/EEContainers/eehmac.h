@@ -15,8 +15,8 @@ public:
     void setType(const QString &type);
 
 private:
-    QString mValue;
     QString mType;
+    QString mValue;
 };
 
 #endif // HMAC_H

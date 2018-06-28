@@ -1,11 +1,12 @@
 #include "eemaincontroller.h"
+#include "EESDK/eesdk.h"
+#include "eelog.h"
+#include "eefolderparsecontroller.h"
+#include "eejsonbuilder.h"
 
 #include <QApplication>
 #include <QPixmap>
 #include <QtWidgets/QSystemTrayIcon>
-
-#include "EESDK/eesdk.h"
-#include "eelog.h"
 
 int main(int argc, char *argv[])
 {
@@ -13,7 +14,8 @@ int main(int argc, char *argv[])
 
     EELog::getInstance()->initialise();
 
-    EEMainController w;
+    EEMainController mainController;
+    mainController.startSignInWithCivic();
 
     return a.exec();
 }

@@ -2,6 +2,7 @@
 #include <QDebug>
 #include <QTimer>
 
+#include <typeinfo>
 
 EEStatusTimer &EEStatusTimer::getInstance()
 {
@@ -36,13 +37,13 @@ EEStatusTimer::~EEStatusTimer()
 
 void EEStatusTimer::startTimer()
 {
-    qDebug() << "- EEStatusTimer::startTimer()";
+    qDebug() << typeid(*this).name() << " : " << __FUNCTION__;
     mTimer->start(mInterval);
 }
 
 void EEStatusTimer::stopCheck()
 {
-    qDebug() <<"- EEStatusTimer::stopCheck()";
+    qDebug() << typeid(*this).name() << " : " << __FUNCTION__;
     if (mTimer->isActive()) {
         mTimer->stop();
     }
@@ -50,7 +51,7 @@ void EEStatusTimer::stopCheck()
 
 void EEStatusTimer::checkStatus()
 {
-    qDebug() << "- EEActivationTimer::checkStatus()";
+    qDebug() << typeid(*this).name() << " : " << __FUNCTION__;
     qDebug() << "CHECK STATUS BY TIMER";
 
     emit checkStatusByTimer();
